@@ -1,0 +1,129 @@
+package com.bytecrack.audio
+
+import android.content.Context
+import android.media.MediaPlayer
+import com.bytecrack.R
+import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import javax.inject.Inject
+import javax.inject.Singleton
+
+enum class MusicTrack(
+    val resId: Int
+) {
+    VOYAGER_1(R.raw.music_voyager_1),       // Menú + nivel 1
+    THE_DEAD(R.raw.music_the_dead),        // Niveles 4, 7, 10... (3k+1)
+    TWILIGHT_VOYAGE(R.raw.music_twilight_voyage),  // Niveles 2, 5, 8... (3k+2)
+    BIOHAZARD(R.raw.music_biohazard);       // Niveles 3, 6, 9... (3k)
+
+    companion object {
+        /** Menú y nivel 1: Voyager 1. Luego por nivel: 3k+1→The Dead, 3k+2→Twilight, 3k→Biohazard. */
+        fun forLevel(level: Int): MusicTrack = when {
+            level <= 1 -> VOYAGER_1
+            level % 3 == 1 -> THE_DEAD
+            level % 3 == 2 -> TWILIGHT_VOYAGE
+            else -> BIOHAZARD
+        }
+    }
+}
+
+@Singleton
+class MusicManager @Inject constructor(
+    @param:ApplicationContext private val context: Context
+) {
+    private val scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
+
+    private companion object {
+        const val MUSIC_VOLUME = 0.5f
+    }
+
+    var isMusicEnabled: Boolean = true
+        private set
+
+    private var player: MediaPlayer? = null
+    private var currentTrack: MusicTrack? = null
+    private var fadeJob: Job? = null
+    private var isPaused: Boolean = false
+
+    fun playForLevel(level: Int) = play(MusicTrack.forLevel(level))
+
+    /** Pausa la música (p. ej. durante anuncios). Usar resume() al cerrar el anuncio. */
+    fun pause() {
+        isPaused = false
+        player?.takeIf { it.isPlaying }?.let {
+            it.pause()
+            isPaused = true
+        }
+    }
+
+    /** Reanuda la música tras pausar (p. ej. al cerrar un anuncio). */
+    fun resume() {
+        if (isPaused && player != null) {
+            player?.start()
+            isPaused = false
+        }
+    }
+
+    fun play(track: MusicTrack) {
+        if (currentTrack == track && player?.isPlaying == true) return
+
+        currentTrack = track
+
+        if (!isMusicEnabled) return
+
+        stopInternal()
+
+        player = MediaPlayer.create(context, track.resId).apply {
+            isLooping = true
+            setVolume(MUSIC_VOLUME, MUSIC_VOLUME)
+            start()
+        }
+    }
+
+    fun stop() {
+        currentTrack = null
+        stopInternal()
+    }
+
+    private fun stopInternal() {
+        fadeJob?.cancel()
+        isPaused = false
+        player?.apply {
+            if (isPlaying) stop()
+            release()
+        }
+        player = null
+    }
+
+    fun toggle(): Boolean {
+        isMusicEnabled = !isMusicEnabled
+        if (isMusicEnabled) {
+            currentTrack?.let { play(it) }
+        } else {
+            stopInternal()
+        }
+        return isMusicEnabled
+    }
+
+    fun fadeOut() {
+        fadeJob?.cancel()
+        fadeJob = scope.launch {
+            val currentPlayer = player ?: return@launch
+            if (!currentPlayer.isPlaying) return@launch
+
+            var volume = MUSIC_VOLUME
+            while (volume > 0) {
+                volume -= 0.05f
+                if (volume < 0) volume = 0f
+                currentPlayer.setVolume(volume, volume)
+                delay(100)
+            }
+            stopInternal()
+        }
+    }
+}

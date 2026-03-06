@@ -22,8 +22,9 @@ fun DifficultyBadge(
 ) {
     val (label, color) = when (difficulty) {
         Difficulty.NORMAL -> "3 DEC" to MaterialTheme.colorScheme.primary
-        Difficulty.HARD -> "4 DEC x2" to Color(0xFFFF6600)
-        Difficulty.IRONMAN -> "4 HEX x4" to Color(0xFFFF0000)
+        Difficulty.HARD -> "3 HEX x3" to Color(0xFFFF6600)
+        Difficulty.VERY_HARD -> "4 DEC x2" to Color(0xFFFF3300)
+        Difficulty.IRONMAN -> "4 HEX x20" to Color(0xFFFF0000)
     }
 
     Box(

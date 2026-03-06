@@ -1,6 +1,11 @@
 package com.bytecrack.ui.components
 
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -10,8 +15,8 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -37,44 +42,53 @@ fun TimerBar(
         label = "timerBar"
     )
 
+    val isLow = fraction < 0.15f
+    val isMedium = fraction < 0.30f
+
     val barColor = when {
-        fraction < 0.15f -> Color(0xFFFF0000)
-        fraction < 0.3f -> Color(0xFFFF6600)
+        isLow -> Color(0xFFFF0000)
+        isMedium -> Color(0xFFFF6600)
         else -> MaterialTheme.colorScheme.primary
     }
 
+    val infiniteTransition = rememberInfiniteTransition(label = "timerPulse")
+    val pulseAlpha by infiniteTransition.animateFloat(
+        initialValue = 0.45f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(350, easing = LinearEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "pulse"
+    )
+    val fillAlpha = if (isLow) pulseAlpha else 0.65f
+
     Row(
-        modifier = modifier.fillMaxWidth(),
+        modifier = modifier,
         verticalAlignment = Alignment.CenterVertically
     ) {
         Text(
-            text = "TIME",
+            text = "${timeRemaining}s",
             fontFamily = FontFamily.Monospace,
-            fontSize = 10.sp,
+            fontSize = 11.sp,
             fontWeight = FontWeight.Bold,
-            color = barColor.copy(alpha = 0.7f)
+            color = barColor,
+            modifier = Modifier.widthIn(min = 44.dp)
         )
-        Spacer(modifier = Modifier.width(8.dp))
+        Spacer(modifier = Modifier.width(4.dp))
         Box(
             modifier = Modifier
                 .weight(1f)
-                .height(12.dp)
-                .border(1.dp, barColor.copy(alpha = 0.4f))
+                .height(10.dp)
+                .border(1.dp, barColor.copy(alpha = 0.45f))
+                .background(barColor.copy(alpha = 0.06f))
         ) {
             Box(
                 modifier = Modifier
                     .fillMaxHeight()
                     .fillMaxWidth(animatedFraction)
-                    .background(barColor.copy(alpha = 0.6f))
+                    .background(barColor.copy(alpha = fillAlpha))
             )
         }
-        Spacer(modifier = Modifier.width(8.dp))
-        Text(
-            text = "${timeRemaining}s",
-            fontFamily = FontFamily.Monospace,
-            fontSize = 14.sp,
-            fontWeight = FontWeight.Bold,
-            color = barColor
-        )
     }
 }

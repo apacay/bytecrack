@@ -4,7 +4,6 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -19,7 +18,7 @@ import kotlin.random.Random
 
 private const val CHAR_SIZE = 14
 private const val DROP_SPEED_MIN = 1
-private const val DROP_SPEED_MAX = 4
+private const val DROP_SPEED_MAX = 5
 
 private val matrixChars = "0123456789ABCDEF@#$%&*!?><{}[]|/\\~".toCharArray()
 
@@ -27,23 +26,25 @@ private val matrixChars = "0123456789ABCDEF@#$%&*!?><{}[]|/\\~".toCharArray()
 fun MatrixRain(
     modifier: Modifier = Modifier,
     color: Color = Color(0xFF00FF41),
-    density: Float = 0.6f
+    density: Float = 0.6f,
+    instanceId: Int = 0
 ) {
     val textMeasurer = rememberTextMeasurer()
-    val tick = remember { mutableStateOf(0L) }
+    val tick = remember(instanceId) { androidx.compose.runtime.mutableStateOf(0L) }
+    val rng = remember(instanceId) { Random(instanceId + System.nanoTime().hashCode()) }
 
     data class Drop(
         var y: Float,
-        val x: Float,
-        val speed: Int,
-        val length: Int,
+        var x: Float,
+        var speed: Int,
+        var length: Int,
         var chars: CharArray
     )
 
-    val drops = remember { mutableStateOf<List<Drop>>(emptyList()) }
-    val initialized = remember { mutableStateOf(false) }
+    val drops = remember(instanceId) { androidx.compose.runtime.mutableStateOf<List<Drop>>(emptyList()) }
+    val initialized = remember(instanceId) { androidx.compose.runtime.mutableStateOf(false) }
 
-    LaunchedEffect(Unit) {
+    LaunchedEffect(instanceId) {
         while (true) {
             delay(50)
             tick.value++
@@ -51,19 +52,17 @@ fun MatrixRain(
     }
 
     Canvas(modifier = modifier.fillMaxSize()) {
-        val cols = (size.width / CHAR_SIZE).toInt()
-        val rows = (size.height / CHAR_SIZE).toInt()
+        val cols = (size.width / CHAR_SIZE).toInt().coerceAtLeast(1)
 
         if (!initialized.value && cols > 0) {
-            val numDrops = (cols * density).toInt()
+            val numDrops = (cols * density).toInt().coerceAtLeast(2)
             drops.value = List(numDrops) {
-                val x = Random.nextInt(cols) * CHAR_SIZE.toFloat()
                 Drop(
-                    y = Random.nextFloat() * size.height,
-                    x = x,
-                    speed = Random.nextInt(DROP_SPEED_MIN, DROP_SPEED_MAX + 1),
-                    length = Random.nextInt(4, 16),
-                    chars = CharArray(Random.nextInt(4, 16)) { matrixChars.random() }
+                    y = rng.nextFloat() * size.height,
+                    x = rng.nextInt(cols) * CHAR_SIZE.toFloat(),
+                    speed = rng.nextInt(DROP_SPEED_MIN, DROP_SPEED_MAX + 1),
+                    length = rng.nextInt(4, 18),
+                    chars = CharArray(rng.nextInt(4, 18)) { matrixChars[rng.nextInt(matrixChars.size)] }
                 )
             }
             initialized.value = true
@@ -75,8 +74,11 @@ fun MatrixRain(
         drops.value.forEach { drop ->
             drop.y += drop.speed * 2f
             if (drop.y > size.height + drop.length * CHAR_SIZE) {
-                drop.y = -drop.length * CHAR_SIZE.toFloat()
-                drop.chars = CharArray(drop.chars.size) { matrixChars.random() }
+                drop.y = (-drop.length * CHAR_SIZE - rng.nextFloat() * 80f)
+                drop.x = rng.nextInt(cols) * CHAR_SIZE.toFloat()
+                drop.speed = rng.nextInt(DROP_SPEED_MIN, DROP_SPEED_MAX + 1)
+                drop.length = rng.nextInt(4, 18)
+                drop.chars = CharArray(drop.length) { matrixChars[rng.nextInt(matrixChars.size)] }
             }
 
             drop.chars.forEachIndexed { i, c ->

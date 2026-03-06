@@ -8,6 +8,7 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
@@ -30,6 +31,8 @@ import androidx.compose.ui.unit.sp
 fun CodeInputDisplay(
     currentInput: List<Char>,
     digitCount: Int,
+    crackedDigits: Map<Int, Char> = emptyMap(),
+    onCrackPosition: ((Int) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val infiniteTransition = rememberInfiniteTransition(label = "cursor")
@@ -42,6 +45,8 @@ fun CodeInputDisplay(
         ),
         label = "cursorBlink"
     )
+
+    val editablePositions = (0 until digitCount).filter { it !in crackedDigits }.sorted()
 
     Row(
         modifier = modifier,
@@ -56,18 +61,38 @@ fun CodeInputDisplay(
             color = MaterialTheme.colorScheme.primary
         )
         repeat(digitCount) { index ->
-            val digit = currentInput.getOrNull(index)
-            val isCurrentSlot = index == currentInput.size
+            val crackedDigit = crackedDigits[index]
+            val editableIdx = editablePositions.indexOf(index)
+            val digit = crackedDigit ?: currentInput.getOrNull(editableIdx)
+            val isCracked = crackedDigit != null
+            val isCurrentSlot = !isCracked && editablePositions.getOrNull(currentInput.size) == index
+
             val borderColor = when {
+                isCracked -> MaterialTheme.colorScheme.secondary
                 digit != null -> MaterialTheme.colorScheme.primary
                 isCurrentSlot -> MaterialTheme.colorScheme.primary.copy(alpha = cursorAlpha)
                 else -> MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)
             }
+
+            val canCrack = onCrackPosition != null && !isCracked && index !in crackedDigits
+
             Box(
                 modifier = Modifier
                     .size(52.dp)
-                    .border(2.dp, borderColor)
-                    .background(Color.Black.copy(alpha = 0.6f)),
+                    .then(
+                        if (canCrack) Modifier
+                            .clickable { onCrackPosition(index) }
+                            .padding(2.dp)
+                        else Modifier
+                    )
+                    .border(
+                        2.dp,
+                        if (isCracked) borderColor.copy(alpha = 0.8f) else borderColor
+                    )
+                    .background(
+                        if (isCracked) MaterialTheme.colorScheme.secondary.copy(alpha = 0.15f)
+                        else Color.Black.copy(alpha = 0.6f)
+                    ),
                 contentAlignment = Alignment.Center
             ) {
                 if (digit != null) {
@@ -76,7 +101,8 @@ fun CodeInputDisplay(
                         fontFamily = FontFamily.Monospace,
                         fontSize = 28.sp,
                         fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.primary
+                        color = if (isCracked) MaterialTheme.colorScheme.secondary
+                        else MaterialTheme.colorScheme.primary
                     )
                 } else if (isCurrentSlot) {
                     Text(
@@ -85,6 +111,13 @@ fun CodeInputDisplay(
                         fontSize = 22.sp,
                         color = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.alpha(cursorAlpha)
+                    )
+                } else if (canCrack) {
+                    Text(
+                        text = "?",
+                        fontFamily = FontFamily.Monospace,
+                        fontSize = 18.sp,
+                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)
                     )
                 }
             }

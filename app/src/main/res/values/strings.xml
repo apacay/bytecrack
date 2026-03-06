@@ -1,4 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">ByteCrack</string>
+    <!-- Reemplazar con tu Project ID de Play Console > Play Games Services > Configuration -->
+    <string name="game_services_project_id" translatable="false">YOUR_PROJECT_ID</string>
 </resources>

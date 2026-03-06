@@ -7,7 +7,7 @@ class CodeGenerator {
     fun generate(difficulty: Difficulty): List<Char> {
         val digits = difficulty.digits.toList()
         val count = difficulty.digitCount
-        val shuffled = digits.shuffled()
-        return shuffled.take(count)
+        require(count <= digits.size) { "digitCount cannot exceed available digits" }
+        return digits.shuffled().take(count)
     }
 }

@@ -1,5 +1,6 @@
 package com.bytecrack.ui.components
 
+import android.os.Build
 import android.view.HapticFeedbackConstants
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -41,10 +42,10 @@ fun HackerKeyboard(
 ) {
     val rows = if (isHex) {
         listOf(
-            listOf('1', '2', '3', '4', '5'),
-            listOf('6', '7', '8', '9', '0'),
-            listOf('A', 'B', 'C', 'D'),
-            listOf('E', 'F')
+            listOf('1', '2', '3', '4'),
+            listOf('5', '6', '7', '8'),
+            listOf('9', '0', 'A', 'B'),
+            listOf('C', 'D', 'E', 'F')
         )
     } else {
         listOf(
@@ -86,6 +87,7 @@ fun HackerKeyboard(
             HackerKey(
                 label = "EXEC",
                 isAction = true,
+                isSubmit = true,
                 enabled = submitEnabled,
                 accentColor = MaterialTheme.colorScheme.primary,
                 onClick = onSubmit,
@@ -100,6 +102,7 @@ fun HackerKey(
     label: String,
     modifier: Modifier = Modifier,
     isAction: Boolean = false,
+    isSubmit: Boolean = false,
     enabled: Boolean = true,
     accentColor: Color = MaterialTheme.colorScheme.primary,
     onClick: () -> Unit = {}
@@ -134,7 +137,12 @@ fun HackerKey(
                 indication = null,
                 enabled = enabled
             ) {
-                view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+                val hapticType = when {
+                    isSubmit && Build.VERSION.SDK_INT >= Build.VERSION_CODES.R ->
+                        HapticFeedbackConstants.CONFIRM
+                    else -> HapticFeedbackConstants.KEYBOARD_TAP
+                }
+                view.performHapticFeedback(hapticType)
                 onClick()
             },
         contentAlignment = Alignment.Center

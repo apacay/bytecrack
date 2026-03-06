@@ -6,11 +6,11 @@ enum class Tier(
     val basePoints: Int,
     val maxTimeSeconds: Int
 ) {
-    S("Root Access", 30, 1000, 15),
-    A("Admin", 20, 500, 30),
-    B("User", 10, 250, 60),
-    C("Guest", 5, 100, 90),
-    D("Script Kiddie", 0, 50, Int.MAX_VALUE);
+    S("Root Access", 90, 1000, 30),
+    A("Admin", 60, 500, 60),
+    B("User", 35, 250, 90),
+    C("Guest", 20, 100, 120),
+    D("Script Kiddie", 5, 50, Int.MAX_VALUE);
 
     companion object {
         fun fromSolveTime(seconds: Int): Tier = entries.find { seconds < it.maxTimeSeconds } ?: D

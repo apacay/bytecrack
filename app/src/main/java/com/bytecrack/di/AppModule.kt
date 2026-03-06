@@ -4,6 +4,8 @@ import android.content.Context
 import androidx.room.Room
 import com.bytecrack.data.local.AppDatabase
 import com.bytecrack.data.local.GameSessionDao
+import com.bytecrack.ads.AdManager
+import com.bytecrack.data.remote.PlayGamesRepository
 import com.bytecrack.domain.CodeGenerator
 import com.bytecrack.domain.GuessEvaluator
 import com.bytecrack.domain.TierCalculator
@@ -40,4 +42,12 @@ object AppModule {
     @Provides
     @Singleton
     fun provideTierCalculator(): TierCalculator = TierCalculator()
+
+    @Provides
+    @Singleton
+    fun providePlayGamesRepository(): PlayGamesRepository = PlayGamesRepository()
+
+    @Provides
+    @Singleton
+    fun provideAdManager(): AdManager = AdManager()
 }

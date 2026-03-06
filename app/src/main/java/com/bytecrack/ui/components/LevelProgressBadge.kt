@@ -33,6 +33,7 @@ fun LevelProgressBadge(
     val difficultyColor = when (difficulty) {
         Difficulty.NORMAL -> MaterialTheme.colorScheme.primary
         Difficulty.HARD -> Color(0xFFFF6600)
+        Difficulty.VERY_HARD -> Color(0xFFFF3300)
         Difficulty.IRONMAN -> Color(0xFFFF0000)
     }
 
