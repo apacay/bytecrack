@@ -50,6 +50,26 @@ class GameViewModel @Inject constructor(
     private var isTimerPaused = false
     private var levelStartTime = 0L
 
+    // Flags para diferir reanudar música/timer hasta que la Activity vuelva al primer plano
+    private var pendingMusicResume = false
+    private var pendingTimerStart = false
+    private var pendingTimerResume = false
+
+    fun onActivityResumed() {
+        if (pendingMusicResume) {
+            pendingMusicResume = false
+            musicManager.resume()
+        }
+        if (pendingTimerStart) {
+            pendingTimerStart = false
+            startTimer()
+        }
+        if (pendingTimerResume) {
+            pendingTimerResume = false
+            resumeTimer()
+        }
+    }
+
     init {
         viewModelScope.launch {
             _uiState.update {
@@ -113,7 +133,13 @@ class GameViewModel @Inject constructor(
         val newAttempts = state.attemptsRemaining - 1
 
         if (guess.isCorrect) {
-            onLevelComplete(state.timeRemainingSeconds)
+            val timeAtGuess = state.timeRemainingSeconds
+            // Agregar el guess ganador al log para que el usuario lo vea antes de la transición
+            _uiState.update { it.copy(guesses = newGuesses, attemptsRemaining = newAttempts) }
+            viewModelScope.launch {
+                delay(750)
+                onLevelComplete(timeAtGuess)
+            }
             return
         }
 
@@ -251,7 +277,7 @@ class GameViewModel @Inject constructor(
                     }
                 },
                 onDismissed = {
-                    musicManager.resume()
+                    pendingMusicResume = true
                     if (_uiState.value.offerRewardedAd) {
                         declineExtraAttempt()
                     }
@@ -260,7 +286,7 @@ class GameViewModel @Inject constructor(
         ) {
             return
         }
-        musicManager.resume()
+        pendingMusicResume = true
         declineExtraAttempt()
     }
 
@@ -341,12 +367,12 @@ class GameViewModel @Inject constructor(
         if (shouldShowInterstitial && activity != null) {
             musicManager.pause()
             if (adManager.showInterstitial(activity) {
-                musicManager.resume()
+                pendingMusicResume = true
                 onDismiss()
             }) {
                 return
             }
-            musicManager.resume()
+            pendingMusicResume = true
         }
         onDismiss()
     }
@@ -365,13 +391,14 @@ class GameViewModel @Inject constructor(
                         )
                     }
                     if (wasAtStart) {
-                        startTimer()
+                        // Diferir el inicio del timer hasta que la Activity vuelva al primer plano
+                        pendingTimerStart = true
                     } else {
                         continueToNextLevel()
                     }
                 },
                 onDismissed = {
-                    musicManager.resume()
+                    pendingMusicResume = true
                     if (_uiState.value.showTraceAdOffer || _uiState.value.showTraceAdOfferAtStart) {
                         skipTraceOffer()
                     }
@@ -380,7 +407,7 @@ class GameViewModel @Inject constructor(
         ) {
             return
         }
-        musicManager.resume()
+        pendingMusicResume = true
         skipTraceOffer()
     }
 
@@ -414,9 +441,17 @@ class GameViewModel @Inject constructor(
         _uiState.update {
             it.copy(
                 traceCount = it.traceCount - 1,
-                hintRevealedDigits = it.hintRevealedDigits + digit
+                hintRevealedDigits = it.hintRevealedDigits + digit,
+                showHintPopup = true,
+                lastHintDigit = digit
             )
         }
+        pauseTimer()
+    }
+
+    fun dismissHintPopup() {
+        _uiState.update { it.copy(showHintPopup = false) }
+        resumeTimer()
     }
 
     fun requestTraceAdForPurchase(activity: Activity) {
@@ -430,20 +465,20 @@ class GameViewModel @Inject constructor(
                             offerTraceAd = false
                         )
                     }
-                    resumeTimer()
+                    pendingTimerResume = true
                 },
                 onDismissed = {
-                    musicManager.resume()
+                    pendingMusicResume = true
                     _uiState.update { it.copy(offerTraceAd = false) }
-                    resumeTimer()
+                    pendingTimerResume = true
                 }
             )
         ) {
             return
         }
-        musicManager.resume()
+        pendingMusicResume = true
         _uiState.update { it.copy(offerTraceAd = false) }
-        resumeTimer()
+        pendingTimerResume = true
     }
 
     fun declineTraceAd() {
@@ -461,9 +496,18 @@ class GameViewModel @Inject constructor(
         _uiState.update {
             it.copy(
                 traceCount = it.traceCount - TRACES_FOR_CRACK,
-                crackedDigits = it.crackedDigits + (position to digit)
+                crackedDigits = it.crackedDigits + (position to digit),
+                showCrackPopup = true,
+                lastCrackPosition = position,
+                lastCrackDigit = digit
             )
         }
+        pauseTimer()
+    }
+
+    fun dismissCrackPopup() {
+        _uiState.update { it.copy(showCrackPopup = false) }
+        resumeTimer()
     }
 
     fun continueToNextLevel() {
@@ -724,5 +768,10 @@ data class GameUiState(
     val levelsCompletedSinceLastTraceOffer: Int = 0,
     val showTraceAdOffer: Boolean = false,
     val offerTraceAd: Boolean = false,
-    val showTraceAdOfferAtStart: Boolean = false
+    val showTraceAdOfferAtStart: Boolean = false,
+    val showHintPopup: Boolean = false,
+    val lastHintDigit: Char? = null,
+    val showCrackPopup: Boolean = false,
+    val lastCrackPosition: Int? = null,
+    val lastCrackDigit: Char? = null
 )
