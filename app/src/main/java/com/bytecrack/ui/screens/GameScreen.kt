@@ -132,6 +132,7 @@ private fun GamePlayContent(
         isGameOver
     }
 
+    Box(modifier = Modifier.fillMaxSize()) {
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -285,6 +286,15 @@ private fun GamePlayContent(
             }
         }
     }
+
+        // Popup de Game Over — otra consola sobre la principal
+        if (uiState.isGameOver) {
+            GameOverPopup(
+                uiState = uiState,
+                onBackToMenu = onBackToMenu
+            )
+        }
+    }
 }
 
 private data class LogLine(val text: String, val color: Color)
@@ -353,8 +363,7 @@ private fun GameConsoleBox(
         }
         if (prev.showTransitionBackToGame && !curr.showTransitionBackToGame) {
             listOf(
-                "Emergency override accepted",
-                "Restoring session integrity...",
+                "Identity mask confirmed",
                 "Breaches restored — timer resumed",
                 "Session active"
             ).forEach { completedLog.add(LogLine("> $it", cyan)) }
@@ -364,31 +373,48 @@ private fun GameConsoleBox(
                 .forEach { completedLog.add(LogLine("> $it", orange)) }
         }
         if (prev.showFailureTransition && !curr.showFailureTransition) {
-            listOf(
-                "Bypassing security control...",
-                "Session lock detected",
-                "Warning: checksum mismatch",
-                "Retrying handshake...",
-                "Firewall rule conflict",
-                "Trace initiated — source logged",
-                "Access revoked — session terminated",
-                "─────────────────────────────",
-                "ACCESS DENIED"
-            ).forEach { completedLog.add(LogLine("> $it", red)) }
+            val lines = when (prev.pendingGameOverReason) {
+                GameOverReason.TimeUp -> listOf(
+                    "Security trace outpaced breach completion",
+                    "Source IP identified and logged",
+                    "Connection terminated by remote",
+                    "─────────────────────────────",
+                    "ACCESS DENIED — IP COMPROMISED"
+                )
+                else -> listOf(
+                    "Suspicious repeated breach attempts detected",
+                    "Security investigating source",
+                    "IP trace completed — identity linked",
+                    "─────────────────────────────",
+                    "ACCESS DENIED — IP COMPROMISED"
+                )
+            }
+            lines.forEach { completedLog.add(LogLine("> $it", red)) }
         }
         if (prev.showDiscoveredTransition && !curr.showDiscoveredTransition) {
-            listOf("Intrusion detected", "Trace initiated", "Session compromised")
-                .forEach { completedLog.add(LogLine("> $it", red)) }
+            val lines = if (prev.pendingRewardAdFromTimeOut) {
+                listOf(
+                    "Security trace outpaced breach completion",
+                    "Source IP identified and logged",
+                    "Connection at risk"
+                )
+            } else {
+                listOf(
+                    "Suspicious repeated breach attempts detected",
+                    "Security investigating source",
+                    "IP trace in progress"
+                )
+            }
+            lines.forEach { completedLog.add(LogLine("> $it", red)) }
         }
         if (prev.showEscapeTransition && !curr.showEscapeTransition) {
             listOf(
-                "Bypassing security control...",
-                "Session lock detected — applying patch",
-                "Warning: checksum mismatch",
-                "Retrying handshake...",
-                "Firewall rule conflict",
-                "Injecting workaround module...",
-                "Connection restored — session active"
+                "Identity mask applied",
+                "Routing through alternate node",
+                "Session re-established as new user",
+                "Breach attempts restored",
+                "Timer resumed",
+                "Connection active"
             ).forEach { completedLog.add(LogLine("> $it", cyan)) }
         }
 
@@ -455,6 +481,26 @@ private fun GameConsoleBox(
                     color = Color(0xFF00FF41).copy(alpha = 0.5f),
                     modifier = Modifier.padding(bottom = 8.dp)
                 )
+                // 1. Transición de entrada (top)
+                when {
+                uiState.showLevelIntro -> {
+                    InlineTypedLines(
+                        lines = listOf(
+                            "Connecting to target host...",
+                            "Initializing payload sequence...",
+                            "Compiling exploit module...",
+                            "Loading bytecrack engine...",
+                            "Injecting into game loop...",
+                            "Establishing secure channel...",
+                            "Access granted — level ready"
+                        ),
+                        accentColor = MaterialTheme.colorScheme.secondary,
+                        durationMs = 4500L,
+                        onComplete = {}
+                    )
+                }
+                else -> {
+                // 2. Partida (medio): completedLog + guesses + hints
                 completedLog.forEach { line ->
                     Text(
                         text = line.text,
@@ -485,24 +531,8 @@ private fun GameConsoleBox(
                     )
                 }
 
+                // 3. Transición de salida + scoring (bottom)
                 when {
-                uiState.showLevelIntro -> {
-                    InlineTypedLines(
-                        lines = listOf(
-                            "Connecting to target host...",
-                            "Initializing payload sequence...",
-                            "Compiling exploit module...",
-                            "Loading bytecrack engine...",
-                            "Injecting into game loop...",
-                            "Establishing secure channel...",
-                            "Access granted — level ready"
-                        ),
-                        accentColor = MaterialTheme.colorScheme.secondary,
-                        durationMs = 4500L,
-                        onComplete = {}
-                    )
-                }
-
                 uiState.isLevelComplete && uiState.showVictoryPenetration -> {
                     InlineTypedLines(
                         lines = listOf(
@@ -543,8 +573,7 @@ private fun GameConsoleBox(
                 uiState.showTransitionBackToGame -> {
                     InlineTypedLines(
                         lines = listOf(
-                            "Emergency override accepted",
-                            "Restoring session integrity...",
+                            "Identity mask confirmed",
                             "Breaches restored — timer resumed",
                             "Session active"
                         ),
@@ -568,18 +597,24 @@ private fun GameConsoleBox(
                 }
 
                 uiState.showFailureTransition -> {
-                    InlineTypedLines(
-                        lines = listOf(
-                            "Bypassing security control...",
-                            "Session lock detected",
-                            "Warning: checksum mismatch",
-                            "Retrying handshake...",
-                            "Firewall rule conflict",
-                            "Trace initiated — source logged",
-                            "Access revoked — session terminated",
+                    val failureLines = when (uiState.pendingGameOverReason) {
+                        GameOverReason.TimeUp -> listOf(
+                            "Security trace outpaced breach completion",
+                            "Source IP identified and logged",
+                            "Connection terminated by remote",
                             "─────────────────────────────",
-                            "ACCESS DENIED"
-                        ),
+                            "ACCESS DENIED — IP COMPROMISED"
+                        )
+                        else -> listOf(
+                            "Suspicious repeated breach attempts detected",
+                            "Security investigating source",
+                            "IP trace completed — identity linked",
+                            "─────────────────────────────",
+                            "ACCESS DENIED — IP COMPROMISED"
+                        )
+                    }
+                    InlineTypedLines(
+                        lines = failureLines,
                         accentColor = Color(0xFFFF0000),
                         durationMs = 4500L,
                         onComplete = { viewModel.completeGameOver() }
@@ -587,12 +622,20 @@ private fun GameConsoleBox(
                 }
 
                 uiState.showDiscoveredTransition -> {
+                    val discoveredLines = when (uiState.pendingRewardAdFromTimeOut) {
+                        true -> listOf(
+                            "Security trace outpaced breach completion",
+                            "Source IP identified and logged",
+                            "Connection at risk"
+                        )
+                        else -> listOf(
+                            "Suspicious repeated breach attempts detected",
+                            "Security investigating source",
+                            "IP trace in progress"
+                        )
+                    }
                     InlineTypedLines(
-                        lines = listOf(
-                            "Intrusion detected",
-                            "Trace initiated",
-                            "Session compromised"
-                        ),
+                        lines = discoveredLines,
                         accentColor = Color(0xFFFF0000),
                         durationMs = 1800L,
                         onComplete = { viewModel.dismissDiscoveredTransition() }
@@ -613,13 +656,12 @@ private fun GameConsoleBox(
                 uiState.showEscapeTransition -> {
                     InlineTypedLines(
                         lines = listOf(
-                            "Bypassing security control...",
-                            "Session lock detected — applying patch",
-                            "Warning: checksum mismatch",
-                            "Retrying handshake...",
-                            "Firewall rule conflict",
-                            "Injecting workaround module...",
-                            "Connection restored — session active"
+                            "Identity mask applied",
+                            "Routing through alternate node",
+                            "Session re-established as new user",
+                            "Breach attempts restored",
+                            "Timer resumed",
+                            "Connection active"
                         ),
                         accentColor = Color(0xFF00FFFF),
                         durationMs = 2200L,
@@ -646,7 +688,9 @@ private fun GameConsoleBox(
                 }
 
                 uiState.isGameOver -> {
-                    InlineGameOver(uiState = uiState, onBackToMenu = onBackToMenu)
+                    // No mostrar inline — el popup GameOverPopup se muestra encima
+                }
+            }
                 }
             }
 
@@ -963,19 +1007,27 @@ private fun InlineRewardedAdPrompt(
     val green = Color(0xFF00FF41)
 
     val contextLines = if (fromTimeOut) {
-        listOf("Session timeout detected", "Timer expired", "Connection at risk")
+        listOf(
+            "Security trace faster than breach completion",
+            "Source IP identified and logged",
+            "Connection flagged"
+        )
     } else {
-        listOf("Intrusion detected", "Trace initiated", "Session compromised")
+        listOf(
+            "Suspicious repeated breach attempts detected",
+            "Security investigating source",
+            "IP trace in progress"
+        )
     }
 
     val promptLines = listOf(
         "─────────────────────────────",
         "BREACH FAILED",
-        if (fromTimeOut) "Timeout — session expired" else "No attempts remaining",
+        if (fromTimeOut) "Trace outpaced payload — IP compromised" else "Repeated attempts flagged — IP trace initiated",
         "─────────────────────────────",
-        "Emergency override available:",
-        "+${difficulty.rewardAdBreachExtension} attempts and +${difficulty.rewardAdSeconds}s restored",
-        "Requires watching a brief ad"
+        "Override: mask as alternate identity",
+        "Continue breach attempts as different user",
+        "+${difficulty.rewardAdBreachExtension} attempts, +${difficulty.rewardAdSeconds}s — requires brief ad"
     )
 
     var typedPromptLine by remember { mutableIntStateOf(0) }
@@ -1026,7 +1078,7 @@ private fun InlineRewardedAdPrompt(
                 val color = when {
                     line == "BREACH FAILED" -> red
                     line.startsWith("─") -> orange.copy(alpha = 0.4f)
-                    line.startsWith("Emergency") -> orange
+                    line.startsWith("Override") -> orange
                     else -> orange.copy(alpha = 0.8f)
                 }
                 Text(
@@ -1078,8 +1130,7 @@ private fun InlinePotentialGameOver(
 
     val infoLines = listOf(
         "─────────────────────────────",
-        "SESSION RESTORED",
-        "Override applied successfully",
+        "Game Over ...?",
         "─────────────────────────────",
         "Continue or end session?"
     )
@@ -1116,7 +1167,7 @@ private fun InlinePotentialGameOver(
             }
             if (charsToShow > 0) {
                 val color = when {
-                    line == "SESSION RESTORED" -> cyan
+                    line == "Game Over ...?" -> red
                     line.startsWith("─") -> cyan.copy(alpha = 0.3f)
                     else -> cyan.copy(alpha = 0.8f)
                 }
@@ -1560,6 +1611,138 @@ private fun DifficultyOption(
                     fontFamily = FontFamily.Monospace,
                     fontSize = 11.sp,
                     color = color.copy(alpha = 0.6f)
+                )
+            }
+        }
+    }
+}
+
+// ─── Popup Game Over (otra consola sobre la principal) ────────────────────────
+
+@Composable
+private fun GameOverPopup(
+    uiState: GameUiState,
+    onBackToMenu: () -> Unit
+) {
+    val red = Color(0xFFFF0000)
+    val orange = Color(0xFFFF6600)
+    val green = Color(0xFF00FF41)
+
+    val (reasonTitle, reasonDetail) = when (uiState.gameOverReason) {
+        GameOverReason.TimeUp -> "TRACE OUTPACED PAYLOAD" to "Security was faster — source IP identified and logged"
+        GameOverReason.NoAttemptsLeft -> "REPEATED ATTEMPTS FLAGGED" to "Suspicious breach pattern — IP trace completed"
+        null -> "CONNECTION TERMINATED" to "Unknown cause"
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black.copy(alpha = 0.75f))
+            .clickable { /* bloquea interacción con consola detrás */ },
+        contentAlignment = Alignment.Center
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth(0.9f)
+                .background(Color(0xFF0a0f0a))
+                .border(2.dp, Color(0xFFFF0000).copy(alpha = 0.6f))
+                .padding(16.dp)
+        ) {
+            Column {
+                Text(
+                    text = "> security_alert // breach_log",
+                    fontFamily = FontFamily.Monospace,
+                    fontSize = 10.sp,
+                    color = red.copy(alpha = 0.5f),
+                    modifier = Modifier.padding(bottom = 8.dp)
+                )
+                Text(
+                    text = "─────────────────────────────",
+                    fontFamily = FontFamily.Monospace,
+                    fontSize = 13.sp,
+                    color = red.copy(alpha = 0.5f),
+                    modifier = Modifier.padding(bottom = 4.dp)
+                )
+                Text(
+                    text = "ACCESS DENIED — IP COMPROMISED",
+                    fontFamily = FontFamily.Monospace,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = red,
+                    modifier = Modifier.padding(bottom = 4.dp)
+                )
+                Text(
+                    text = "> $reasonTitle",
+                    fontFamily = FontFamily.Monospace,
+                    fontSize = 13.sp,
+                    color = orange,
+                    modifier = Modifier.padding(bottom = 2.dp)
+                )
+                Text(
+                    text = "> $reasonDetail",
+                    fontFamily = FontFamily.Monospace,
+                    fontSize = 12.sp,
+                    color = orange.copy(alpha = 0.9f),
+                    modifier = Modifier.padding(bottom = 8.dp)
+                )
+                Text(
+                    text = "─── SESSION REPORT ───",
+                    fontFamily = FontFamily.Monospace,
+                    fontSize = 12.sp,
+                    color = green.copy(alpha = 0.5f),
+                    modifier = Modifier.padding(bottom = 4.dp)
+                )
+                Text(
+                    text = "> FINAL SCORE: ${uiState.totalScore}",
+                    fontFamily = FontFamily.Monospace,
+                    fontSize = 13.sp,
+                    color = green.copy(alpha = 0.9f),
+                    modifier = Modifier.padding(bottom = 2.dp)
+                )
+                Text(
+                    text = "> LEVEL REACHED: ${uiState.level}",
+                    fontFamily = FontFamily.Monospace,
+                    fontSize = 13.sp,
+                    color = green.copy(alpha = 0.8f),
+                    modifier = Modifier.padding(bottom = 2.dp)
+                )
+                Text(
+                    text = "> DIFFICULTY: ${uiState.difficulty.displayName.uppercase()}",
+                    fontFamily = FontFamily.Monospace,
+                    fontSize = 13.sp,
+                    color = green.copy(alpha = 0.8f),
+                    modifier = Modifier.padding(bottom = 2.dp)
+                )
+                Text(
+                    text = "> ATTEMPTS USED: ${uiState.guesses.size}/${uiState.maxAttempts}",
+                    fontFamily = FontFamily.Monospace,
+                    fontSize = 13.sp,
+                    color = green.copy(alpha = 0.8f),
+                    modifier = Modifier.padding(bottom = 4.dp)
+                )
+                if (uiState.secretCode != null) {
+                    Text(
+                        text = "─── TARGET CODE ───",
+                        fontFamily = FontFamily.Monospace,
+                        fontSize = 12.sp,
+                        color = orange.copy(alpha = 0.5f),
+                        modifier = Modifier.padding(top = 4.dp, bottom = 4.dp)
+                    )
+                    Text(
+                        text = "> ${uiState.secretCode.joinToString(" ")}",
+                        fontFamily = FontFamily.Monospace,
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 2.sp,
+                        color = orange,
+                        modifier = Modifier.padding(bottom = 12.dp)
+                    )
+                }
+                TerminalButton(
+                    text = "[ DESCONECTAR ]",
+                    color = red,
+                    modifier = Modifier.fillMaxWidth(),
+                    onClick = onBackToMenu
                 )
             }
         }

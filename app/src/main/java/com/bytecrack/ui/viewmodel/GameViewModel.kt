@@ -265,11 +265,13 @@ class GameViewModel @Inject constructor(
     }
 
     fun declineExtraAttempt() {
+        val reason = if (_uiState.value.offerRewardedAdFromTimeOut) GameOverReason.TimeUp else GameOverReason.NoAttemptsLeft
         _uiState.update {
             it.copy(
                 offerRewardedAd = false,
+                offerRewardedAdFromTimeOut = false,
                 showFailureTransition = true,
-                pendingGameOverReason = GameOverReason.NoAttemptsLeft
+                pendingGameOverReason = reason
             )
         }
     }
@@ -310,7 +312,7 @@ class GameViewModel @Inject constructor(
     fun dismissTransitionToGiveUp() {
         val reason = _uiState.value.rewardAdOriginalReason ?: GameOverReason.NoAttemptsLeft
         _uiState.update { it.copy(showTransitionToGiveUp = false, rewardAdOriginalReason = null) }
-        onGameOver(reason = reason, playSound = false)
+        onGameOver(reason = reason, playSound = true)
     }
 
     fun completeGameOver() {
