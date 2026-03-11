@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.bytecrack.ads.AdManager
 import com.bytecrack.audio.MusicManager
 import com.bytecrack.audio.SoundManager
+import com.bytecrack.audio.TypingDuration
 import com.bytecrack.data.local.GameSessionDao
 import com.bytecrack.data.local.entities.GameSessionEntity
 import com.bytecrack.domain.CodeGenerator
@@ -27,7 +28,7 @@ import javax.inject.Inject
 private const val INITIAL_TIME_SECONDS = 500L
 private const val MAX_ATTEMPTS = 10
 private const val DIFFICULTY_CHOICE_INTERVAL = 10
-private const val LEVEL_INTRO_DURATION_MS = 4500L
+private const val LEVEL_INTRO_DURATION_MS = 3000L
 private const val INTERSTITIAL_INTERVAL = 15
 private const val TRACE_AD_OFFER_INTERVAL = 3
 private const val TRACES_FOR_CRACK = 3
@@ -49,6 +50,9 @@ class GameViewModel @Inject constructor(
     private var timerJob: Job? = null
     private var isTimerPaused = false
     private var levelStartTime = 0L
+
+    /** True cuando el usuario ya ganó la recompensa del ad pero el ad sigue en primer plano; aplicar estado al cerrar. */
+    private var earnedRewardPendingAdDismiss = false
 
     // Flags para diferir reanudar música/timer hasta que la Activity vuelva al primer plano
     private var pendingMusicResume = false
@@ -119,6 +123,10 @@ class GameViewModel @Inject constructor(
 
     fun preloadAds(activity: Activity) {
         adManager.loadInterstitial(activity)
+        adManager.loadRewarded(activity)
+    }
+
+    fun preloadRewardAdForCheckpoint(activity: Activity) {
         adManager.loadRewarded(activity)
     }
 
@@ -224,8 +232,9 @@ class GameViewModel @Inject constructor(
     fun dismissDiscoveredTransition() {
         val fromTimeOut = _uiState.value.pendingRewardAdFromTimeOut
         val hasRewardAd = adManager.isRewardedReady()
+        val rewardAdAvailable = hasRewardAd && !_uiState.value.rewardAdUsedThisBlock
         val reason = if (fromTimeOut) GameOverReason.TimeUp else GameOverReason.NoAttemptsLeft
-        if (hasRewardAd) {
+        if (rewardAdAvailable) {
             _uiState.update {
                 it.copy(
                     showDiscoveredTransition = false,
@@ -252,33 +261,35 @@ class GameViewModel @Inject constructor(
         if (adManager.showRewarded(
                 activity,
                 onReward = {
-                    val state = _uiState.value
-                    val used = state.maxAttempts - state.attemptsRemaining
-                    val ext = state.difficulty.rewardAdBreachExtension
-                    val threshold = state.difficulty.rewardAdBreachThreshold
-                    val (newAttempts, newMax) = when {
-                        state.offerRewardedAdFromTimeOut && used < threshold ->
-                            state.attemptsRemaining to state.maxAttempts
-                        state.offerRewardedAdFromTimeOut && used >= threshold ->
-                            ext to (used + ext)
-                        else ->
-                            ext to (state.maxAttempts + ext)
-                    }
-                    _uiState.update {
-                        it.copy(
-                            attemptsRemaining = newAttempts,
-                            maxAttempts = newMax,
-                            timeRemainingSeconds = it.timeRemainingSeconds + state.difficulty.rewardAdSeconds,
-                            offerRewardedAd = false,
-                            offerRewardedAdFromTimeOut = false,
-                            wonViaReward = true,
-                            showEscapeTransition = true
-                        )
-                    }
+                    // Solo marcar que ganó la recompensa; la transición y sonidos se aplican al CERRAR el ad (onDismissed)
+                    earnedRewardPendingAdDismiss = true
                 },
                 onDismissed = {
                     pendingMusicResume = true
-                    if (_uiState.value.offerRewardedAd) {
+                    if (earnedRewardPendingAdDismiss) {
+                        earnedRewardPendingAdDismiss = false
+                        val state = _uiState.value
+                        val n = state.maxAttempts - state.attemptsRemaining
+                        val m = state.maxAttempts
+                        val p = m / 2
+                        val (newAttempts, newMax) = if (n < p) {
+                            state.attemptsRemaining to state.maxAttempts
+                        } else {
+                            p to (n + p)
+                        }
+                        _uiState.update {
+                            it.copy(
+                                attemptsRemaining = newAttempts,
+                                maxAttempts = newMax,
+                                timeRemainingSeconds = it.timeRemainingSeconds + state.difficulty.rewardAdSeconds,
+                                offerRewardedAd = false,
+                                offerRewardedAdFromTimeOut = false,
+                                rewardAdUsedThisBlock = true,
+                                wonViaReward = true,
+                                showEscapeTransition = true
+                            )
+                        }
+                    } else if (_uiState.value.offerRewardedAd) {
                         declineExtraAttempt()
                     }
                 }
@@ -437,6 +448,7 @@ class GameViewModel @Inject constructor(
             .filter { it !in alreadyRevealed }
         if (availableDigits.isEmpty()) return
 
+        soundManager.playTraceUse()
         val digit = availableDigits.random()
         _uiState.update {
             it.copy(
@@ -492,6 +504,7 @@ class GameViewModel @Inject constructor(
         if (state.traceCount < TRACES_FOR_CRACK || position in state.crackedDigits) return
         if (position !in secret.indices) return
 
+        soundManager.playTraceUse()
         val digit = secret[position]
         _uiState.update {
             it.copy(
@@ -518,24 +531,30 @@ class GameViewModel @Inject constructor(
         if (state.showTraceAdOffer || state.showTraceAdOfferAtStart) return
 
         val newLevel = state.level + 1
-        val effectiveBonusSeconds = tier.bonusSeconds * state.difficulty.timeBonusMultiplier
+        val effectiveBonusSeconds = tier.bonusSeconds * state.difficulty.pointMultiplier
         val newTime = state.timeRemainingSeconds + effectiveBonusSeconds
 
         if (state.level % DIFFICULTY_CHOICE_INTERVAL == 0) {
+            musicManager.restoreVolume()
             _uiState.update {
                 it.copy(
                     screen = GameScreen.DifficultyChoice,
                     isLevelComplete = false,
                     lastTier = null,
-                    timeRemainingSeconds = newTime
+                    currentTier = null,
+                    currentTierPoints = 0,
+                    timeRemainingSeconds = newTime,
+                    rewardAdUsedThisBlock = false
                 )
             }
         } else {
             startNextLevel(newLevel, state.difficulty, newTime)
         }
+        _uiState.update { it.copy(timeBonusDisplayApplied = false, scoreBonusDisplayApplied = false) }
     }
 
     fun selectDifficulty(difficulty: Difficulty) {
+        soundManager.playDifficultySelect()
         val state = _uiState.value
         startNextLevel(state.level + 1, difficulty, state.timeRemainingSeconds)
     }
@@ -559,11 +578,15 @@ class GameViewModel @Inject constructor(
                 difficulty = difficulty,
                 isLevelComplete = false,
                 lastTier = null,
+                currentTier = null,
+                currentTierPoints = 0,
                 hintRevealedDigits = emptyList(),
                 crackedDigits = emptyMap(),
                 wonViaReward = false,
                 showTraceAdOffer = false,
-                offerTraceAd = false
+                offerTraceAd = false,
+                timeBonusDisplayApplied = false,
+                scoreBonusDisplayApplied = false
             )
         }
         scheduleLevelIntroDismiss()
@@ -596,35 +619,40 @@ class GameViewModel @Inject constructor(
         val solveTime = ((System.currentTimeMillis() - levelStartTime) / 1000).toInt()
         val (tier, points) = tierCalculator.calculate(solveTime, state.difficulty)
         val pointsToAdd = if (state.wonViaReward) 0 else points
-        val newScore = state.totalScore + pointsToAdd
-
-        viewModelScope.launch {
-            gameSessionDao.insert(
-                GameSessionEntity(
-                    highScore = newScore,
-                    bestLevel = state.level,
-                    timestamp = System.currentTimeMillis()
-                )
-            )
-        }
 
         val newLevelsCompleted = state.levelsCompletedSinceLastTraceOffer + 1
         val showTraceOfferFromInterval = newLevelsCompleted >= TRACE_AD_OFFER_INTERVAL
         val showTraceOffer = showTraceOfferFromInterval
 
-        soundManager.playAccessGranted()
+        musicManager.fadeToSilence()
         _uiState.update {
             it.copy(
                 isLevelComplete = true,
                 showVictoryPenetration = true,
                 lastTier = tier,
-                totalScore = newScore,
+                // totalScore NO se modifica aqui; queda en el valor acumulado anterior.
+                // lastLevelPoints guarda los puntos pendientes que la animacion del odometro sumara.
                 lastLevelPoints = pointsToAdd,
                 levelsPlayedThisSession = it.levelsPlayedThisSession + 1,
                 levelsCompletedSinceLastTraceOffer = if (showTraceOfferFromInterval) 0 else newLevelsCompleted,
                 showTraceAdOffer = showTraceOffer
             )
         }
+    }
+
+    // Llamado desde la UI al terminar la animacion del odometro de score.
+    fun confirmScoreBonus() {
+        _uiState.update { it.copy(totalScore = it.totalScore + it.lastLevelPoints) }
+    }
+
+    /** Marca que la animación del bonus de tiempo ya se mostró (para no re-animar en rotación). */
+    fun markTimeBonusDisplayed() {
+        _uiState.update { it.copy(timeBonusDisplayApplied = true) }
+    }
+
+    /** Marca que el bonus de score ya se aplicó (para no volver a sumar en rotación). */
+    fun markScoreBonusDisplayed() {
+        _uiState.update { it.copy(scoreBonusDisplayApplied = true) }
     }
 
     private fun onGameOver(reason: GameOverReason, playSound: Boolean = true) {
@@ -666,18 +694,31 @@ class GameViewModel @Inject constructor(
         timerJob?.cancel()
         isTimerPaused = false
         timerJob = viewModelScope.launch {
+            // Inicializar tier actual inmediatamente al arrancar
+            val initState = _uiState.value
+            val initElapsed = ((System.currentTimeMillis() - levelStartTime) / 1000).toInt()
+            val (initTier, initPoints) = tierCalculator.calculate(initElapsed, initState.difficulty)
+            _uiState.update { it.copy(currentTier = initTier, currentTierPoints = initPoints) }
+
             while (true) {
                 delay(1000)
                 if (isTimerPaused) continue
                 val currentState = _uiState.value
                 val newTime = currentState.timeRemainingSeconds - 1
+
+                val elapsedSec = ((System.currentTimeMillis() - levelStartTime) / 1000).toInt()
+                val (newCurrentTier, newCurrentPoints) = tierCalculator.calculate(elapsedSec, currentState.difficulty)
+                val tierChanged = currentState.currentTier != null && currentState.currentTier != newCurrentTier
+
                 if (newTime <= 0) {
                     if (currentState.attemptsRemaining > 0) {
                         _uiState.update {
                             it.copy(
                                 timeRemainingSeconds = 0,
                                 showDiscoveredTransition = true,
-                                pendingRewardAdFromTimeOut = true
+                                pendingRewardAdFromTimeOut = true,
+                                currentTier = newCurrentTier,
+                                currentTierPoints = newCurrentPoints
                             )
                         }
                     } else {
@@ -685,16 +726,58 @@ class GameViewModel @Inject constructor(
                             it.copy(
                                 timeRemainingSeconds = 0,
                                 showFailureTransition = true,
-                                pendingGameOverReason = GameOverReason.TimeUp
+                                pendingGameOverReason = GameOverReason.TimeUp,
+                                currentTier = newCurrentTier,
+                                currentTierPoints = newCurrentPoints
                             )
                         }
                     }
                     return@launch
                 }
-                _uiState.update { it.copy(timeRemainingSeconds = newTime) }
+                if (currentState.timeRemainingSeconds > 30 && newTime <= 30) {
+                    soundManager.playTimerLow()
+                }
+                _uiState.update {
+                    it.copy(
+                        timeRemainingSeconds = newTime,
+                        currentTier = newCurrentTier,
+                        currentTierPoints = newCurrentPoints,
+                        tierJustChanged = tierChanged
+                    )
+                }
+                if (tierChanged) {
+                    // Resetear la flag despues de que la UI la consuma (shake ~600ms)
+                    viewModelScope.launch {
+                        delay(600)
+                        _uiState.update { it.copy(tierJustChanged = false) }
+                    }
+                }
             }
         }
     }
+
+    fun playTypingSound(duration: TypingDuration) {
+        soundManager.playTyping(duration)
+    }
+
+    fun playAccessGranted() = soundManager.playAccessGranted()
+
+    fun playTierWinSound() {
+        val tier = _uiState.value.lastTier ?: return
+        soundManager.playTierWin(tier)
+    }
+
+    fun playTimerOdometer() = soundManager.playTimerOdometer()
+    fun playScoreOdometer() = soundManager.playScoreOdometer()
+    fun playOdometerSettle() = soundManager.playScoreSettle()
+
+    fun playSystemOk() = soundManager.playSystemOk()
+    fun playSystemErr() = soundManager.playSystemErr()
+    fun playSystemWarn() = soundManager.playSystemWarn()
+    fun playEnterPress() = soundManager.playEnterPress()
+    fun playPenetrationSuccess() = soundManager.playPenetrationSuccess()
+    fun playSshConnect() = soundManager.playSshConnect()
+    fun playDifficultySelect() = soundManager.playDifficultySelect()
 
     fun toggleMusic() {
         val enabled = musicManager.toggle()
@@ -760,6 +843,7 @@ data class GameUiState(
     val isMusicEnabled: Boolean = true,
     val offerRewardedAd: Boolean = false,
     val offerRewardedAdFromTimeOut: Boolean = false,
+    val rewardAdUsedThisBlock: Boolean = false,
     val traceCount: Int = 0,
     val hintRevealedDigits: List<Char> = emptyList(),
     val crackedDigits: Map<Int, Char> = emptyMap(),
@@ -773,5 +857,12 @@ data class GameUiState(
     val lastHintDigit: Char? = null,
     val showCrackPopup: Boolean = false,
     val lastCrackPosition: Int? = null,
-    val lastCrackDigit: Char? = null
+    val lastCrackDigit: Char? = null,
+    val currentTier: Tier? = null,
+    val currentTierPoints: Int = 0,
+    val tierJustChanged: Boolean = false,
+    /** True cuando la animación del bonus de tiempo ya se mostró (evita re-animación en rotación). */
+    val timeBonusDisplayApplied: Boolean = false,
+    /** True cuando el bonus de score ya se confirmó (evita re-sumando en rotación). */
+    val scoreBonusDisplayApplied: Boolean = false
 )

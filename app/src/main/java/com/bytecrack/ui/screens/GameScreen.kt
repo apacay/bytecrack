@@ -2,6 +2,7 @@ package com.bytecrack.ui.screens
 
 import android.app.Activity
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -11,6 +12,7 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.FastOutSlowInEasing
+import com.bytecrack.domain.model.Tier
 import androidx.compose.animation.fadeIn
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -46,6 +48,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.setValue
 import kotlinx.coroutines.CompletableDeferred
@@ -62,7 +65,9 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.layout.offset
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlin.random.Random
 import com.bytecrack.domain.model.Difficulty
 import com.bytecrack.ui.components.CodeInputDisplay
@@ -79,6 +84,7 @@ import com.bytecrack.ui.viewmodel.GameOverReason
 import com.bytecrack.ui.viewmodel.GameScreen as GameScreenState
 import com.bytecrack.ui.viewmodel.GameUiState
 import com.bytecrack.ui.viewmodel.GameViewModel
+import com.bytecrack.audio.TypingDuration
 
 @Composable
 fun GameScreen(
@@ -100,6 +106,10 @@ fun GameScreen(
                     LaunchedEffect(uiState.screen) {
                         if (activity != null) viewModel.preloadAds(activity)
                     }
+                    // Precargar reward ad al cambiar de nivel para tenerlo listo (p. ej. nivel 12 tras elegir dificultad en 10)
+                    LaunchedEffect(uiState.level) {
+                        if (activity != null) viewModel.preloadRewardAdForCheckpoint(activity)
+                    }
                 }
                 GamePlayContent(
                     uiState = uiState,
@@ -108,10 +118,15 @@ fun GameScreen(
                     activity = activity
                 )
             }
-            GameScreenState.DifficultyChoice -> DifficultyChoiceContent(
-                uiState = uiState,
-                onSelectDifficulty = { diff: Difficulty -> viewModel.requestInterstitialAndSelectDifficulty(activity, diff) }
-            )
+            GameScreenState.DifficultyChoice -> {
+                LaunchedEffect(uiState.screen) {
+                    if (activity != null) viewModel.preloadRewardAdForCheckpoint(activity)
+                }
+                DifficultyChoiceContent(
+                    uiState = uiState,
+                    onSelectDifficulty = { diff: Difficulty -> viewModel.requestInterstitialAndSelectDifficulty(activity, diff) }
+                )
+            }
             GameScreenState.MainMenu,
             GameScreenState.Leaderboard -> {}
         }
@@ -139,46 +154,134 @@ private fun GamePlayContent(
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
-    // ── Animación de bonus al completar nivel ──────────────────────────────────
+    // ── Animación de bonus secuencial al completar nivel ──────────────────────
     var bonusTimerTarget by remember { mutableStateOf<Long?>(null) }
-    var bonusAnimDoneCallback by remember { mutableStateOf<(() -> Unit)?>(null) }
-    var scoreFlashActive by remember { mutableStateOf(false) }
+    var bonusTimerDoneCallback by remember { mutableStateOf<(() -> Unit)?>(null) }
+    var timerHighlightActive by remember { mutableStateOf(false) }
 
+    var scoreHighlightActive by remember { mutableStateOf(false) }
+    var scoreAnimStarted by remember { mutableStateOf(false) }
+    var scoreAnimDoneCallback by remember { mutableStateOf<(() -> Unit)?>(null) }
+
+    // Fase 1: animacion del timer subiendo con el bonus
     val animatedTimerValue by animateFloatAsState(
         targetValue = (bonusTimerTarget ?: uiState.timeRemainingSeconds).toFloat(),
-        animationSpec = tween(durationMillis = 1000, easing = FastOutSlowInEasing),
+        animationSpec = tween(durationMillis = 1200, easing = FastOutSlowInEasing),
         label = "bonusTimer",
         finishedListener = {
-            bonusAnimDoneCallback?.invoke()
-            bonusAnimDoneCallback = null
+            timerHighlightActive = false
+            bonusTimerDoneCallback?.invoke()
+            bonusTimerDoneCallback = null
         }
     )
-    val animatedScoreColor by animateColorAsState(
-        targetValue = if (scoreFlashActive) Color(0xFF00FFFF) else Color(0xFF00FF41).copy(alpha = 0.9f),
-        animationSpec = tween(durationMillis = 450),
-        label = "scoreColor"
-    )
-    // Resetear al cambiar isLevelComplete
+    // Sonido del odómetro de timer en el mismo frame en que arranca la animación
+    LaunchedEffect(bonusTimerTarget) {
+        if (bonusTimerTarget != null) {
+            viewModel.playTimerOdometer()
+        }
+    }
+
+    // Fase 2: odometro de score.
+    // totalScore = puntos acumulados ANTERIORES (no incluye lastLevelPoints hasta confirmScoreBonus).
+    // La animacion va de totalScore a totalScore + lastLevelPoints.
+    // Al terminar, viewModel.confirmScoreBonus() suma los puntos al estado oficial.
+    val scoreAnimatable = remember { Animatable(0f) }
+    val animatedScoreValue: Int = scoreAnimatable.value.toInt()
+
+    // Sincronizar display durante el juego (sin animacion)
+    LaunchedEffect(uiState.totalScore) {
+        if (!uiState.isLevelComplete) {
+            scoreAnimatable.snapTo(uiState.totalScore.toFloat())
+        }
+    }
+
+    // Reset al entrar/salir del estado de nivel completo
     LaunchedEffect(uiState.isLevelComplete) {
         bonusTimerTarget = null
-        scoreFlashActive = false
-    }
-    // Apagar el flash de score después de 1.6s (mientras la barra sube)
-    LaunchedEffect(scoreFlashActive) {
-        if (scoreFlashActive) {
-            delay(1600)
-            scoreFlashActive = false
+        timerHighlightActive = false
+        scoreHighlightActive = false
+        scoreAnimStarted = false
+        bonusTimerDoneCallback = null
+        scoreAnimDoneCallback = null
+        if (!uiState.isLevelComplete) {
+            // Al salir (Continue): sync instantaneo al totalScore ya confirmado
+            scoreAnimatable.snapTo(uiState.totalScore.toFloat())
+        }
+        // Si al entrar ya está aplicado el bonus (p. ej. tras rotación), sincronizar score
+        if (uiState.isLevelComplete && uiState.scoreBonusDisplayApplied) {
+            scoreAnimatable.snapTo(uiState.totalScore.toFloat())
         }
     }
-    val onBonusPhaseStart: (Long, () -> Unit) -> Unit = { targetTime, onDone ->
-        bonusTimerTarget = targetTime
-        bonusAnimDoneCallback = onDone
-        scoreFlashActive = true
+
+    // Tras rotación: si ya se aplicó el score bonus, mostrar totalScore sin re-animar
+    LaunchedEffect(uiState.isLevelComplete, uiState.scoreBonusDisplayApplied) {
+        if (uiState.isLevelComplete && uiState.scoreBonusDisplayApplied) {
+            scoreAnimatable.snapTo(uiState.totalScore.toFloat())
+        }
     }
-    val displayTimerValue: Long = if (uiState.isLevelComplete && bonusTimerTarget != null) {
-        animatedTimerValue.toLong()
-    } else {
-        uiState.timeRemainingSeconds
+
+    // Corrutina de animacion: totalScore -> totalScore + lastLevelPoints (solo si aún no se aplicó el bonus)
+    LaunchedEffect(scoreAnimStarted) {
+        if (scoreAnimStarted && !uiState.scoreBonusDisplayApplied) {
+            viewModel.playScoreOdometer()
+            val targetScore = (uiState.totalScore + uiState.lastLevelPoints).toFloat()
+            scoreAnimatable.animateTo(
+                targetValue = targetScore,
+                animationSpec = tween(durationMillis = 1200, easing = FastOutSlowInEasing)
+            )
+            // Confirmar puntos en el ViewModel al terminar la animacion
+            viewModel.confirmScoreBonus()
+            scoreHighlightActive = false
+            scoreAnimDoneCallback?.invoke()
+            scoreAnimDoneCallback = null
+        }
+    }
+
+    // Color de highlight para score
+    val animatedScoreColor by animateColorAsState(
+        targetValue = if (scoreHighlightActive) Color(0xFF00FFFF) else Color(0xFF00FF41).copy(alpha = 0.9f),
+        animationSpec = tween(300),
+        label = "scoreColor"
+    )
+
+    // Callbacks para las dos fases de la animacion de bonus (SFX en el LaunchedEffect que anima)
+    val onTimerBonusStart: (Long, () -> Unit) -> Unit = { targetTime, onDone ->
+        timerHighlightActive = true
+        bonusTimerTarget = targetTime
+        bonusTimerDoneCallback = {
+            viewModel.playOdometerSettle()
+            viewModel.markTimeBonusDisplayed()
+            onDone()
+        }
+    }
+    val onScoreBonusStart: (() -> Unit) -> Unit = { onDone ->
+        scoreHighlightActive = true
+        scoreAnimStarted = true
+        scoreAnimDoneCallback = {
+            viewModel.playOdometerSettle()
+            viewModel.markScoreBonusDisplayed()
+            onDone()
+        }
+    }
+
+    val displayTimerValue: Long = when {
+        uiState.isLevelComplete && uiState.timeBonusDisplayApplied && uiState.lastTier != null ->
+            uiState.timeRemainingSeconds + uiState.lastTier.bonusSeconds * uiState.difficulty.pointMultiplier
+        uiState.isLevelComplete && bonusTimerTarget != null ->
+            animatedTimerValue.toLong()
+        else ->
+            uiState.timeRemainingSeconds
+    }
+
+    // Shake offset para el indicador de tier
+    val tierShakeOffset = remember { Animatable(0f) }
+    LaunchedEffect(uiState.tierJustChanged) {
+        if (uiState.tierJustChanged) {
+            val shakeAmplitudes = listOf(5f, -5f, 4f, -4f, 2f, -2f, 1f, -1f, 0f)
+            for (amp in shakeAmplitudes) {
+                tierShakeOffset.animateTo(amp, animationSpec = tween(35, easing = LinearEasing))
+            }
+        }
     }
     // ──────────────────────────────────────────────────────────────────────────
 
@@ -269,21 +372,35 @@ private fun GamePlayContent(
             ) {
                 TimerBar(
                     timeRemaining = displayTimerValue,
+                    isUrgent = uiState.timeRemainingSeconds < 30L && !uiState.isLevelComplete,
+                    isHighlighted = timerHighlightActive,
                     modifier = Modifier.weight(0.75f)
                 )
                 Spacer(modifier = Modifier.width(6.dp))
-                Text(
-                    text = "SCORE:${uiState.totalScore}",
-                    fontFamily = FontFamily.Monospace,
-                    fontSize = 10.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = animatedScoreColor
-                )
+                Column(horizontalAlignment = Alignment.End) {
+                    Text(
+                        text = "SCORE:${animatedScoreValue}",
+                        fontFamily = FontFamily.Monospace,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = animatedScoreColor
+                    )
+                    val ct = uiState.currentTier
+                    if (ct != null && !uiState.isLevelComplete && !uiState.isGameOver) {
+                        Text(
+                            text = "[${ct.name}]+${uiState.currentTierPoints}",
+                            fontFamily = FontFamily.Monospace,
+                            fontSize = 10.sp,
+                            color = tierColor(ct).copy(alpha = 0.85f),
+                            modifier = Modifier.offset(x = tierShakeOffset.value.dp)
+                        )
+                    }
+                }
                 Spacer(modifier = Modifier.width(4.dp))
                 Text(
                     text = "BR:${uiState.attemptsRemaining}/${uiState.maxAttempts}",
                     fontFamily = FontFamily.Monospace,
-                    fontSize = 10.sp,
+                    fontSize = 13.sp,
                     color = when {
                         uiState.attemptsRemaining <= 2 -> Color(0xFFFF0000).copy(alpha = 0.85f)
                         uiState.attemptsRemaining <= 5 -> Color(0xFFFF6600).copy(alpha = 0.85f)
@@ -309,7 +426,8 @@ private fun GamePlayContent(
                     activity = activity,
                     digitCount = digitCount,
                     onBackToMenu = onBackToMenu,
-                    onBonusPhaseStart = onBonusPhaseStart,
+                    onTimerBonusStart = onTimerBonusStart,
+                    onScoreBonusStart = onScoreBonusStart,
                     modifier = Modifier
                         .weight(1.1f)
                         .fillMaxHeight()
@@ -336,7 +454,8 @@ private fun GamePlayContent(
                 activity = activity,
                 digitCount = digitCount,
                 onBackToMenu = onBackToMenu,
-                onBonusPhaseStart = onBonusPhaseStart,
+                onTimerBonusStart = onTimerBonusStart,
+                onScoreBonusStart = onScoreBonusStart,
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxWidth()
@@ -366,7 +485,11 @@ private fun GamePlayContent(
         if (uiState.showHintPopup && uiState.lastHintDigit != null) {
             TraceHintPopup(
                 digit = uiState.lastHintDigit,
-                onDismiss = { viewModel.dismissHintPopup() }
+                onDismiss = { viewModel.dismissHintPopup() },
+                onTypingStart = { viewModel.playTypingSound(TypingDuration.MEDIUM_2) },
+                onLineRevealed = { tl ->
+                    if (tl.isSystemResponse) viewModel.playSystemOk() else viewModel.playEnterPress()
+                }
             )
         }
 
@@ -378,7 +501,11 @@ private fun GamePlayContent(
             TraceCrackPopup(
                 position = uiState.lastCrackPosition,
                 digit = uiState.lastCrackDigit,
-                onDismiss = { viewModel.dismissCrackPopup() }
+                onDismiss = { viewModel.dismissCrackPopup() },
+                onTypingStart = { viewModel.playTypingSound(TypingDuration.MEDIUM_2) },
+                onLineRevealed = { tl ->
+                    if (tl.isSystemResponse) viewModel.playSystemOk() else viewModel.playEnterPress()
+                }
             )
         }
     }
@@ -399,12 +526,62 @@ private fun GameConsoleBox(
     activity: Activity?,
     digitCount: Int,
     onBackToMenu: () -> Unit,
-    onBonusPhaseStart: ((Long, () -> Unit) -> Unit)? = null,
+    onTimerBonusStart: ((Long, () -> Unit) -> Unit)? = null,
+    onScoreBonusStart: ((() -> Unit) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val scrollState = rememberScrollState()
+    val scope = rememberCoroutineScope()
     val completedLog = remember { mutableStateListOf<LogEntry>() }
     var prevUiState by remember { mutableStateOf(uiState) }
+
+    // ── Callbacks de sonido por línea para InlineTypedLines ─────────────────────
+    // Cada tipo de sonido de sistema suena una sola vez por transición activa.
+    val playedSystemSounds = remember { mutableSetOf<String>() }
+    val activeTransitionKey = with(uiState) {
+        showLevelIntro to (isLevelComplete to (showVictoryPenetration to (
+            showTransitionBackToGame to (showTransitionToGiveUp to (showFailureTransition to (
+                showDiscoveredTransition to (offerRewardedAd to (showEscapeTransition to
+                    (offerTraceAd to showTraceAdOfferAtStart)))))))))
+    }
+    LaunchedEffect(activeTransitionKey) { playedSystemSounds.clear() }
+
+    fun playSystemOnce(key: String, play: () -> Unit) {
+        if (playedSystemSounds.add(key)) play()
+    }
+
+    val defaultLineRevealed: (TransitionLine) -> Unit = { tl ->
+        if (tl.isSystemResponse) {
+            when {
+                tl.text.startsWith("[OK]")   -> playSystemOnce("ok")   { viewModel.playSystemOk() }
+                tl.text.startsWith("[ERR]")  -> playSystemOnce("err")  { viewModel.playSystemErr() }
+                tl.text.startsWith("[WARN]") -> playSystemOnce("warn") { viewModel.playSystemWarn() }
+            }
+        } else {
+            viewModel.playEnterPress()
+        }
+    }
+    val victoryLineRevealed: (TransitionLine) -> Unit = { tl ->
+        if (tl.isSystemResponse) {
+            when {
+                "PENETRATION SUCCESSFUL" in tl.text -> playSystemOnce("pen") { viewModel.playPenetrationSuccess() }
+                tl.text.startsWith("[OK]")           -> playSystemOnce("ok")  { viewModel.playSystemOk() }
+            }
+        } else {
+            viewModel.playEnterPress()
+        }
+    }
+    val introLineRevealed: (TransitionLine) -> Unit = { tl ->
+        if (tl.isSystemResponse) {
+            when {
+                "Connected to" in tl.text   -> playSystemOnce("ssh") { viewModel.playSshConnect() }
+                tl.text.startsWith("[OK]")  -> playSystemOnce("ok")  { viewModel.playSystemOk() }
+            }
+        } else {
+            viewModel.playEnterPress()
+        }
+    }
+    // ──────────────────────────────────────────────────────────────────────────
 
     SideEffect {
         val prev = prevUiState
@@ -451,17 +628,30 @@ private fun GameConsoleBox(
                 "$ write session.token" to green.copy(alpha = 0.9f),
                 "[OK] PENETRATION SUCCESSFUL" to green
             ).forEach { (text, color) ->             completedLog.add(LogEntry.Line(text, color)) }
+            // No añadimos aquí el bloque de resultado (ACCESS GRANTED + puntos); se añade al pulsar Continuar con tiempo y bonus
         }
         if (prev.isLevelComplete && !curr.isLevelComplete) {
+            // Al continuar al siguiente nivel: añadir una sola vez el bloque con puntos y time bonus
             val tier = prev.lastTier
-            val lines = buildList {
-                add("─────────────────────────────")
-                add("ACCESS GRANTED")
-                if (tier != null) add("TIER: ${tier.name} — ${tier.displayName}")
-                if (prev.wonViaReward) add("CONTINUATION (reward — no points)")
-                else add("POINTS: +${prev.lastLevelPoints}")
+            if (tier != null) {
+                val mult = prev.difficulty.pointMultiplier
+                val effectiveBonus = tier.bonusSeconds * mult
+                val resultLines = buildList<Pair<String, Color>> {
+                    add("─────────────────────────────" to green.copy(alpha = 0.3f))
+                    add("ACCESS GRANTED" to green)
+                    add("TIER: ${tier.name} — ${tier.displayName}" to cyan)
+                    add(
+                        (if (mult > 1) "TIME BONUS: +${effectiveBonus}s  (${tier.bonusSeconds}s tier × ${mult} diff)"
+                        else "TIME BONUS: +${effectiveBonus}s") to green.copy(alpha = 0.8f)
+                    )
+                    if (prev.wonViaReward) add("CONTINUATION (reward — no points)" to green.copy(alpha = 0.8f))
+                    else add(
+                        (if (mult > 1) "POINTS: +${prev.lastLevelPoints}  (${tier.basePoints} base × ${mult} diff)"
+                        else "POINTS: +${prev.lastLevelPoints}") to green.copy(alpha = 0.8f)
+                    )
+                }
+                resultLines.forEach { (text, color) -> completedLog.add(LogEntry.Line("> $text", color)) }
             }
-            lines.forEach { completedLog.add(LogEntry.Line("> $it", green.copy(alpha = 0.8f))) }
         }
         if (prev.showTransitionBackToGame && !curr.showTransitionBackToGame) {
             listOf(
@@ -570,7 +760,7 @@ private fun GameConsoleBox(
 
     LaunchedEffect(completedLog.size, uiState.guesses.size, uiState.hintRevealedDigits.size, isInTransition, uiState.screen) {
         // Esperar a que el layout mida el contenido nuevo (especialmente tras transición de nivel)
-        delay(200)
+        delay(50)
         scrollState.animateScrollTo(scrollState.maxValue)
     }
 
@@ -652,7 +842,9 @@ private fun GameConsoleBox(
                             TransitionLine("[OK] Access granted — ready", isSystemResponse = true)
                         ),
                         accentColor = MaterialTheme.colorScheme.secondary,
-                        onComplete = {}
+                        onComplete = {},
+                        onTypingStart = { viewModel.playTypingSound(TypingDuration.LONG_3) },
+                        onLineRevealed = introLineRevealed
                     )
                 }
                 else -> {
@@ -670,7 +862,9 @@ private fun GameConsoleBox(
                             TransitionLine("[OK] PENETRATION SUCCESSFUL", isSystemResponse = true)
                         ),
                         accentColor = Color(0xFF00FF41),
-                        onComplete = { viewModel.dismissVictoryPenetration() }
+                        onComplete = { viewModel.dismissVictoryPenetration() },
+                        onTypingStart = { viewModel.playTypingSound(TypingDuration.FULL) },
+                        onLineRevealed = victoryLineRevealed
                     )
                 }
 
@@ -682,7 +876,12 @@ private fun GameConsoleBox(
                         onSkip = { viewModel.skipTraceOffer() },
                         buttonsOutsideConsole = true,
                         onButtonsReady = { showTransitionButtons = true },
-                        onBonusPhaseStart = onBonusPhaseStart
+                        onTimerBonusStart = onTimerBonusStart,
+                        onScoreBonusStart = onScoreBonusStart,
+                        onAccessGranted = { viewModel.playAccessGranted() },
+                        onTierRevealed = { viewModel.playTierWinSound() },
+                        onNoBonusPhases = { viewModel.markTimeBonusDisplayed(); viewModel.markScoreBonusDisplayed() },
+                        onRequestScrollToEnd = { scope.launch { delay(50); scrollState.animateScrollTo(scrollState.maxValue) } }
                     )
                 }
 
@@ -691,7 +890,8 @@ private fun GameConsoleBox(
                         onContinue = { viewModel.confirmContinueAfterReward() },
                         onGiveUp = { viewModel.confirmGiveUpAfterReward() },
                         buttonsOutsideConsole = true,
-                        onButtonsReady = { showTransitionButtons = true }
+                        onButtonsReady = { showTransitionButtons = true },
+                        onTypingStart = { viewModel.playTypingSound(TypingDuration.SHORT_06) }
                     )
                 }
 
@@ -704,7 +904,9 @@ private fun GameConsoleBox(
                             TransitionLine("[OK] Timer resumed", isSystemResponse = true)
                         ),
                         accentColor = Color(0xFF00FFFF),
-                        onComplete = { viewModel.dismissTransitionBackToGame() }
+                        onComplete = { viewModel.dismissTransitionBackToGame() },
+                        onTypingStart = { viewModel.playTypingSound(TypingDuration.MEDIUM_2) },
+                        onLineRevealed = defaultLineRevealed
                     )
                 }
 
@@ -716,7 +918,9 @@ private fun GameConsoleBox(
                             TransitionLine("[OK] Trace incomplete — safe exit", isSystemResponse = true)
                         ),
                         accentColor = Color(0xFFFF6600),
-                        onComplete = { viewModel.dismissTransitionToGiveUp() }
+                        onComplete = { viewModel.dismissTransitionToGiveUp() },
+                        onTypingStart = { viewModel.playTypingSound(TypingDuration.MEDIUM_15) },
+                        onLineRevealed = defaultLineRevealed
                     )
                 }
 
@@ -742,7 +946,8 @@ private fun GameConsoleBox(
                     InlineTypedLines(
                         lines = failureLines,
                         accentColor = Color(0xFFFF0000),
-                        onComplete = { viewModel.completeGameOver() }
+                        onComplete = { viewModel.completeGameOver() },
+                        onLineRevealed = defaultLineRevealed
                     )
                 }
 
@@ -760,7 +965,8 @@ private fun GameConsoleBox(
                     InlineTypedLines(
                         lines = discoveredLines,
                         accentColor = Color(0xFFFF0000),
-                        onComplete = { viewModel.dismissDiscoveredTransition() }
+                        onComplete = { viewModel.dismissDiscoveredTransition() },
+                        onLineRevealed = defaultLineRevealed
                     )
                 }
 
@@ -771,7 +977,9 @@ private fun GameConsoleBox(
                         onWatchAd = { activity?.let { act -> viewModel.requestRewardedAd(act) } },
                         onDecline = { viewModel.declineExtraAttempt() },
                         buttonsOutsideConsole = true,
-                        onButtonsReady = { showTransitionButtons = true }
+                        onButtonsReady = { showTransitionButtons = true },
+                        onTypingStart = { viewModel.playTypingSound(TypingDuration.MEDIUM_2) },
+                        onLineRevealed = defaultLineRevealed
                     )
                 }
 
@@ -787,7 +995,9 @@ private fun GameConsoleBox(
                             TransitionLine("[OK] Node is live", isSystemResponse = true)
                         ),
                         accentColor = Color(0xFF00FFFF),
-                        onComplete = { viewModel.dismissEscapeTransition() }
+                        onComplete = { viewModel.dismissEscapeTransition() },
+                        onTypingStart = { viewModel.playTypingSound(TypingDuration.LONG_3) },
+                        onLineRevealed = defaultLineRevealed
                     )
                 }
 
@@ -796,7 +1006,9 @@ private fun GameConsoleBox(
                         onWatchAd = { activity?.let { act -> viewModel.requestTraceAdForPurchase(act) } },
                         onDecline = { viewModel.declineTraceAd() },
                         buttonsOutsideConsole = true,
-                        onButtonsReady = { showTransitionButtons = true }
+                        onButtonsReady = { showTransitionButtons = true },
+                        onTypingStart = { viewModel.playTypingSound(TypingDuration.SHORT_1) },
+                        onLineRevealed = defaultLineRevealed
                     )
                 }
 
@@ -805,7 +1017,9 @@ private fun GameConsoleBox(
                         onWatchAd = { activity?.let { act -> viewModel.requestTraceAd(act) } },
                         onSkip = { viewModel.skipTraceOffer() },
                         buttonsOutsideConsole = true,
-                        onButtonsReady = { showTransitionButtons = true }
+                        onButtonsReady = { showTransitionButtons = true },
+                        onTypingStart = { viewModel.playTypingSound(TypingDuration.SHORT_1) },
+                        onLineRevealed = defaultLineRevealed
                     )
                 }
 
@@ -920,6 +1134,17 @@ private fun GameControls(
     }
 }
 
+// ─── Helper de color por tier ────────────────────────────────────────────────
+
+private fun tierColor(tier: Tier?): Color = when (tier) {
+    Tier.S -> Color(0xFFFFD700)
+    Tier.A -> Color(0xFF00FF41)
+    Tier.B -> Color(0xFFCCCCCC)
+    Tier.C -> Color(0xFFFF6600)
+    Tier.D -> Color(0xFFFF4444)
+    null   -> Color(0xFF666666)
+}
+
 // ─── Modelo de líneas de transición ──────────────────────────────────────────
 
 /**
@@ -933,9 +1158,34 @@ private data class TransitionLine(
 )
 
 /** Delay variable que simula tipeo humano: velocidad base + ruido aleatorio + micro-pausas en espacios. */
-private suspend fun humanTypeDelay(isSpace: Boolean, baseMs: Long = 32L) {
-    delay((baseMs + Random.nextLong(-10, 18)).coerceAtLeast(15L))
-    if (isSpace && Random.nextFloat() < 0.35f) delay(Random.nextLong(30, 65))
+private suspend fun humanTypeDelay(isSpace: Boolean, baseMs: Long = 18L) {
+    delay((baseMs + Random.nextLong(-5, 10)).coerceAtLeast(10L))
+    if (isSpace && Random.nextFloat() < 0.25f) delay(Random.nextLong(15, 35))
+}
+
+// ─── Spinner de consola (loader mientras el sistema "procesa") ────────────────
+
+@Composable
+private fun ConsoleSpinner(
+    color: Color = Color(0xFF00FF41),
+    frameMs: Long = 100L,
+    modifier: Modifier = Modifier
+) {
+    val frames = listOf('-', '/', '|', '\\')
+    var frameIndex by remember { mutableIntStateOf(0) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            delay(frameMs)
+            frameIndex = (frameIndex + 1) % frames.size
+        }
+    }
+    Text(
+        text = "> ${frames[frameIndex]}",
+        fontFamily = FontFamily.Monospace,
+        fontSize = 13.sp,
+        color = color.copy(alpha = 0.7f),
+        modifier = modifier
+    )
 }
 
 // ─── Componente genérico de texto con animación de tipeo ─────────────────────
@@ -944,28 +1194,48 @@ private suspend fun humanTypeDelay(isSpace: Boolean, baseMs: Long = 32L) {
 private fun InlineTypedLines(
     lines: List<TransitionLine>,
     accentColor: Color = Color(0xFF00FF41),
-    onComplete: () -> Unit = {}
+    onComplete: () -> Unit = {},
+    onTypingStart: () -> Unit = {},
+    onLineRevealed: ((TransitionLine) -> Unit)? = null
 ) {
     // revealedLines[i] = número de chars mostrados para la línea i (-1 = aún no iniciada, Int.MAX = completa)
     val revealedChars = remember { mutableStateListOf<Int>().also { list -> lines.forEach { _ -> list.add(-1) } } }
+    var showSpinner by remember { mutableStateOf(true) }
 
     LaunchedEffect(Unit) {
+        // Spinner inicial breve antes de empezar a tipear
+        delay(500)
+        showSpinner = false
+        onTypingStart()
+
         for (lineIdx in lines.indices) {
             val tl = lines[lineIdx]
             val prefix = if (tl.isSystemResponse) tl.text else "$ ${tl.text}"
             if (tl.isSystemResponse) {
-                delay(Random.nextLong(120, 220))
+                delay(Random.nextLong(60, 120))
                 revealedChars[lineIdx] = prefix.length
+                delay(200) // Esperar a que el texto se pinte en pantalla antes del sonido
+                onLineRevealed?.invoke(tl)
             } else {
                 revealedChars[lineIdx] = 0
                 for (i in prefix.indices) {
                     revealedChars[lineIdx] = i + 1
                     humanTypeDelay(isSpace = prefix[i] == ' ')
                 }
-                delay(Random.nextLong(80, 180))
+                delay(200) // Esperar a que el texto se pinte en pantalla antes del sonido
+                onLineRevealed?.invoke(tl)
+                // Tras terminar de "escribir", spinner mientras espera respuesta del servidor
+                val nextIsResponse = lines.getOrNull(lineIdx + 1)?.isSystemResponse == true
+                if (nextIsResponse) {
+                    showSpinner = true
+                    delay(Random.nextLong(350, 600))
+                    showSpinner = false
+                } else {
+                    delay(Random.nextLong(40, 90))
+                }
             }
         }
-        delay(300)
+        delay(150)
         onComplete()
     }
 
@@ -995,6 +1265,12 @@ private fun InlineTypedLines(
                 fontFamily = FontFamily.Monospace,
                 fontSize = 13.sp,
                 color = color,
+                modifier = Modifier.padding(bottom = 4.dp)
+            )
+        }
+        if (showSpinner) {
+            ConsoleSpinner(
+                color = accentColor,
                 modifier = Modifier.padding(bottom = 4.dp)
             )
         }
@@ -1038,23 +1314,34 @@ private fun InlineLevelComplete(
     onSkip: () -> Unit,
     buttonsOutsideConsole: Boolean = false,
     onButtonsReady: () -> Unit = {},
-    onBonusPhaseStart: ((Long, () -> Unit) -> Unit)? = null
+    onTimerBonusStart: ((Long, () -> Unit) -> Unit)? = null,
+    onScoreBonusStart: ((() -> Unit) -> Unit)? = null,
+    onAccessGranted: () -> Unit = {},
+    onTierRevealed: () -> Unit = {},
+    onNoBonusPhases: (() -> Unit)? = null,
+    onRequestScrollToEnd: () -> Unit = {}
 ) {
     val tier = uiState.lastTier ?: return
     val green = Color(0xFF00FF41)
     val cyan = MaterialTheme.colorScheme.secondary
-    val effectiveBonus = tier.bonusSeconds * uiState.difficulty.timeBonusMultiplier
+    val mult = uiState.difficulty.pointMultiplier
+    val effectiveBonus = tier.bonusSeconds * mult
 
     val infoLines = buildList {
         add("─────────────────────────────")
         add("ACCESS GRANTED")
         add("TIER: ${tier.name} — ${tier.displayName}")
-        add("TIME BONUS: +${effectiveBonus}s" +
-            if (uiState.difficulty.timeBonusMultiplier > 1) " (×${uiState.difficulty.timeBonusMultiplier})" else "")
+        add(
+            if (mult > 1) "TIME BONUS: +${effectiveBonus}s  (${tier.bonusSeconds}s tier × ${mult} diff)"
+            else "TIME BONUS: +${effectiveBonus}s"
+        )
         if (uiState.wonViaReward) {
             add("CONTINUATION (reward — no points)")
         } else {
-            add("POINTS: +${uiState.lastLevelPoints} (×${uiState.difficulty.pointMultiplier})")
+            add(
+                if (mult > 1) "POINTS: +${uiState.lastLevelPoints}  (${tier.basePoints} base × ${mult} diff)"
+                else "POINTS: +${uiState.lastLevelPoints}"
+            )
         }
         if (uiState.showTraceAdOffer) {
             add("─────────────────────────────")
@@ -1066,17 +1353,48 @@ private fun InlineLevelComplete(
 
     val revealedChars = remember { mutableStateListOf<Int>().also { list -> infoLines.forEach { _ -> list.add(-1) } } }
     var showButtons by remember { mutableStateOf(false) }
+    var showSpinner by remember { mutableStateOf(false) }
 
-    LaunchedEffect(Unit) {
-        for (lineIdx in infoLines.indices) {
+    // Auto-scroll para que ACCESS GRANTED, TIME BONUS y POINTS se vean al escribirse
+    LaunchedEffect(revealedChars.toList()) {
+        delay(50)
+        onRequestScrollToEnd()
+    }
+
+    // Clave por nivel: solo ejecutar una vez por nivel completado (evita re-ejecución en rotación)
+    LaunchedEffect(uiState.level) {
+        // Tras rotación: si ya se mostraron timer y score bonus, dejar estado final sin re-ejecutar ni sonidos
+        if (uiState.timeBonusDisplayApplied && uiState.scoreBonusDisplayApplied) {
+            infoLines.forEachIndexed { i, line -> if (i < revealedChars.size) revealedChars[i] = line.length }
+            showButtons = true
+            onButtonsReady()
+            return@LaunchedEffect
+        }
+        val grantedLineIdx = infoLines.indexOfFirst { it.startsWith("ACCESS GRANTED") }
+
+        // ── Bloque A: separador + ACCESS GRANTED ─────────────────────────────────
+        for (lineIdx in 0..grantedLineIdx.coerceAtLeast(0)) {
+            val line = infoLines.getOrNull(lineIdx) ?: continue
+            delay(Random.nextLong(50, 100))
+            revealedChars[lineIdx] = line.length
+        }
+        // Sonido de ACCESS GRANTED en el momento exacto en que el texto aparece
+        onAccessGranted()
+
+        // Spinner 0.5s a 75ms/frame mientras el sistema "procesa"
+        showSpinner = true
+        delay(500)
+        showSpinner = false
+
+        // ── Bloque B: TIER / TIME BONUS / POINTS (y resto de líneas) ────────────
+        for (lineIdx in (grantedLineIdx + 1) until infoLines.size) {
             val line = infoLines[lineIdx]
-            val isSystem = line.startsWith("─") || line.startsWith("ACCESS") ||
-                line.startsWith("TIER") || line.startsWith("TIME") ||
-                line.startsWith("POINTS") || line.startsWith("CONTINUATION") ||
-                line.startsWith("TRACE AVAILABLE") || line.startsWith("Watch") ||
-                line.startsWith("(use")
+            val isSystem = line.startsWith("─") || line.startsWith("TIER") ||
+                line.startsWith("TIME") || line.startsWith("POINTS") ||
+                line.startsWith("CONTINUATION") || line.startsWith("TRACE AVAILABLE") ||
+                line.startsWith("Watch") || line.startsWith("(use")
             if (isSystem) {
-                delay(Random.nextLong(100, 200))
+                delay(Random.nextLong(50, 100))
                 revealedChars[lineIdx] = line.length
             } else {
                 revealedChars[lineIdx] = 0
@@ -1084,20 +1402,35 @@ private fun InlineLevelComplete(
                     revealedChars[lineIdx] = i + 1
                     humanTypeDelay(isSpace = line[i] == ' ')
                 }
-                delay(Random.nextLong(80, 160))
+                delay(Random.nextLong(40, 80))
             }
         }
+
+        // Sonido de tier win; esperar duración del sonido + 1s antes del siguiente paso
+        onTierRevealed()
+        delay(tier.winSoundDurationMs + 1_000L)
+
+        // 0.3s antes de los odómetros
         delay(300)
-        // ── Fase de animación de bonus (timer sube + score parpadea cyan) ─────
-        if (onBonusPhaseStart != null && !uiState.wonViaReward && effectiveBonus > 0) {
+
+        // ── Fase 1: Timer bonus — highlight timer, animar subida, quitar highlight ──
+        if (onTimerBonusStart != null && !uiState.wonViaReward && effectiveBonus > 0) {
             val targetTime = uiState.timeRemainingSeconds + effectiveBonus
-            val deferred = CompletableDeferred<Unit>()
-            onBonusPhaseStart(targetTime) { deferred.complete(Unit) }
-            // Esperar a que la animación del header termine (máx 2.5s como seguridad)
-            withTimeoutOrNull(2500L) { deferred.await() }
-            delay(300)
+            val timerDeferred = CompletableDeferred<Unit>()
+            onTimerBonusStart(targetTime) { timerDeferred.complete(Unit) }
+            withTimeoutOrNull(2500L) { timerDeferred.await() }
+            delay(200)
         }
-        // ─────────────────────────────────────────────────────────────────────
+        // ── Fase 2: Score bonus — highlight score, animar subida, quitar highlight ──
+        if (onScoreBonusStart != null && !uiState.wonViaReward && uiState.lastLevelPoints > 0) {
+            val scoreDeferred = CompletableDeferred<Unit>()
+            onScoreBonusStart { scoreDeferred.complete(Unit) }
+            withTimeoutOrNull(2500L) { scoreDeferred.await() }
+            delay(200)
+        }
+        // Si no hubo fases de bonus (reward), marcar para no re-ejecutar en rotación
+        if (uiState.wonViaReward) onNoBonusPhases?.invoke()
+        // ─────────────────────────────────────────────────────────────────────────
         showButtons = true
         onButtonsReady()
     }
@@ -1122,6 +1455,14 @@ private fun InlineLevelComplete(
                 fontFamily = FontFamily.Monospace,
                 fontSize = 13.sp,
                 color = color,
+                modifier = Modifier.padding(bottom = 4.dp)
+            )
+        }
+
+        if (showSpinner) {
+            ConsoleSpinner(
+                color = green,
+                frameMs = 75L,
                 modifier = Modifier.padding(bottom = 4.dp)
             )
         }
@@ -1166,7 +1507,9 @@ private fun InlineRewardedAdPrompt(
     onWatchAd: () -> Unit,
     onDecline: () -> Unit,
     buttonsOutsideConsole: Boolean = false,
-    onButtonsReady: () -> Unit = {}
+    onButtonsReady: () -> Unit = {},
+    onTypingStart: () -> Unit = {},
+    onLineRevealed: ((TransitionLine) -> Unit)? = null
 ) {
     val red = Color(0xFFFF0000)
     val orange = Color(0xFFFF6600)
@@ -1195,23 +1538,30 @@ private fun InlineRewardedAdPrompt(
     val revealedChars = remember { mutableStateListOf<Int>().also { list -> promptLines.forEach { _ -> list.add(-1) } } }
     var showButtons by remember { mutableStateOf(false) }
 
+    var typingSoundFired by remember { mutableStateOf(false) }
+
     LaunchedEffect(Unit) {
-        delay(150)
+        delay(80)
         for (lineIdx in promptLines.indices) {
             val tl = promptLines[lineIdx]
             if (tl.isSystemResponse) {
-                delay(Random.nextLong(100, 210))
+                delay(Random.nextLong(50, 110))
                 revealedChars[lineIdx] = tl.text.length
+                delay(100) // Esperar 1–2 frames para que el texto se pinte antes del sonido
+                onLineRevealed?.invoke(tl)
             } else {
+                if (!typingSoundFired) { typingSoundFired = true; onTypingStart() }
                 revealedChars[lineIdx] = 0
                 for (i in tl.text.indices) {
                     revealedChars[lineIdx] = i + 1
                     humanTypeDelay(isSpace = tl.text[i] == ' ')
                 }
-                delay(Random.nextLong(80, 160))
+                delay(100) // Esperar 1–2 frames para que el texto se pinte antes del sonido
+                onLineRevealed?.invoke(tl)
+                delay(Random.nextLong(40, 80))
             }
         }
-        delay(300)
+        delay(150)
         showButtons = true
         onButtonsReady()
     }
@@ -1271,7 +1621,8 @@ private fun InlinePotentialGameOver(
     onContinue: () -> Unit,
     onGiveUp: () -> Unit,
     buttonsOutsideConsole: Boolean = false,
-    onButtonsReady: () -> Unit = {}
+    onButtonsReady: () -> Unit = {},
+    onTypingStart: () -> Unit = {}
 ) {
     val cyan = Color(0xFF00FFFF)
     val red = Color(0xFFFF0000)
@@ -1286,24 +1637,26 @@ private fun InlinePotentialGameOver(
 
     val revealedChars = remember { mutableStateListOf<Int>().also { list -> infoLines.forEach { _ -> list.add(-1) } } }
     var showButtons by remember { mutableStateOf(false) }
+    var typingSoundFired by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
         for (lineIdx in infoLines.indices) {
             val line = infoLines[lineIdx]
             val isSystem = line.startsWith("─") || line.startsWith("Game Over")
             if (isSystem) {
-                delay(Random.nextLong(130, 250))
+                delay(Random.nextLong(60, 120))
                 revealedChars[lineIdx] = line.length
             } else {
+                if (!typingSoundFired) { typingSoundFired = true; onTypingStart() }
                 revealedChars[lineIdx] = 0
                 for (i in line.indices) {
                     revealedChars[lineIdx] = i + 1
                     humanTypeDelay(isSpace = line[i] == ' ')
                 }
-                delay(Random.nextLong(80, 160))
+                delay(Random.nextLong(40, 80))
             }
         }
-        delay(250)
+        delay(150)
         showButtons = true
         onButtonsReady()
     }
@@ -1359,7 +1712,9 @@ private fun InlineTraceAdOfferPrompt(
     onWatchAd: () -> Unit,
     onSkip: () -> Unit,
     buttonsOutsideConsole: Boolean = false,
-    onButtonsReady: () -> Unit = {}
+    onButtonsReady: () -> Unit = {},
+    onTypingStart: () -> Unit = {},
+    onLineRevealed: ((TransitionLine) -> Unit)? = null
 ) {
     val cyan = Color(0xFF00BFFF)
     val green = Color(0xFF00FF41)
@@ -1375,6 +1730,7 @@ private fun InlineTraceAdOfferPrompt(
 
     val revealedChars = remember { mutableStateListOf<Int>().also { list -> traceLines.forEach { _ -> list.add(-1) } } }
     var showButtons by remember { mutableStateOf(false) }
+    var typingSoundFired by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
         for (lineIdx in traceLines.indices) {
@@ -1382,12 +1738,17 @@ private fun InlineTraceAdOfferPrompt(
             if (tl.isSystemResponse) {
                 delay(Random.nextLong(90, 190))
                 revealedChars[lineIdx] = tl.text.length
+                delay(100) // Esperar 1–2 frames para que el texto se pinte antes del sonido
+                onLineRevealed?.invoke(tl)
             } else {
+                if (!typingSoundFired) { typingSoundFired = true; onTypingStart() }
                 revealedChars[lineIdx] = 0
                 for (i in tl.text.indices) {
                     revealedChars[lineIdx] = i + 1
                     humanTypeDelay(isSpace = tl.text[i] == ' ')
                 }
+                delay(100) // Esperar 1–2 frames para que el texto se pinte antes del sonido
+                onLineRevealed?.invoke(tl)
                 delay(Random.nextLong(80, 150))
             }
         }
@@ -1448,7 +1809,9 @@ private fun InlineTracePurchasePrompt(
     onWatchAd: () -> Unit,
     onDecline: () -> Unit,
     buttonsOutsideConsole: Boolean = false,
-    onButtonsReady: () -> Unit = {}
+    onButtonsReady: () -> Unit = {},
+    onTypingStart: () -> Unit = {},
+    onLineRevealed: ((TransitionLine) -> Unit)? = null
 ) {
     val cyan = Color(0xFF00BFFF)
     val green = Color(0xFF00FF41)
@@ -1464,6 +1827,7 @@ private fun InlineTracePurchasePrompt(
 
     val revealedChars = remember { mutableStateListOf<Int>().also { list -> traceLines.forEach { _ -> list.add(-1) } } }
     var showButtons by remember { mutableStateOf(false) }
+    var typingSoundFired by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
         for (lineIdx in traceLines.indices) {
@@ -1471,12 +1835,17 @@ private fun InlineTracePurchasePrompt(
             if (tl.isSystemResponse) {
                 delay(Random.nextLong(90, 190))
                 revealedChars[lineIdx] = tl.text.length
+                delay(100) // Esperar 1–2 frames para que el texto se pinte antes del sonido
+                onLineRevealed?.invoke(tl)
             } else {
+                if (!typingSoundFired) { typingSoundFired = true; onTypingStart() }
                 revealedChars[lineIdx] = 0
                 for (i in tl.text.indices) {
                     revealedChars[lineIdx] = i + 1
                     humanTypeDelay(isSpace = tl.text[i] == ' ')
                 }
+                delay(100) // Esperar 1–2 frames para que el texto se pinte antes del sonido
+                onLineRevealed?.invoke(tl)
                 delay(Random.nextLong(80, 150))
             }
         }
@@ -1837,7 +2206,9 @@ private fun DifficultyOption(
 @Composable
 private fun TraceHintPopup(
     digit: Char,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    onTypingStart: () -> Unit = {},
+    onLineRevealed: ((TransitionLine) -> Unit)? = null
 ) {
     val cyan = Color(0xFF00BFFF)
     var animationDone by remember { mutableStateOf(false) }
@@ -1878,7 +2249,9 @@ private fun TraceHintPopup(
                         TransitionLine("[OK] TRACE: digit $digit found in sequence", isSystemResponse = true)
                     ),
                     accentColor = cyan,
-                    onComplete = { animationDone = true }
+                    onComplete = { animationDone = true },
+                    onTypingStart = onTypingStart,
+                    onLineRevealed = onLineRevealed
                 )
             }
         }
@@ -1891,7 +2264,9 @@ private fun TraceHintPopup(
 private fun TraceCrackPopup(
     position: Int,
     digit: Char,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    onTypingStart: () -> Unit = {},
+    onLineRevealed: ((TransitionLine) -> Unit)? = null
 ) {
     val cyan = Color(0xFF00BFFF)
     var animationDone by remember { mutableStateOf(false) }
@@ -1933,7 +2308,9 @@ private fun TraceCrackPopup(
                         TransitionLine("[OK] TRACE: position $position locked → $digit", isSystemResponse = true)
                     ),
                     accentColor = cyan,
-                    onComplete = { animationDone = true }
+                    onComplete = { animationDone = true },
+                    onTypingStart = onTypingStart,
+                    onLineRevealed = onLineRevealed
                 )
             }
         }

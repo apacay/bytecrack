@@ -40,59 +40,111 @@ fun HackerKeyboard(
     submitEnabled: Boolean,
     modifier: Modifier = Modifier
 ) {
-    val rows = if (isHex) {
-        listOf(
-            listOf('1', '2', '3', '4'),
-            listOf('5', '6', '7', '8'),
-            listOf('9', '0', 'A', 'B'),
-            listOf('C', 'D', 'E', 'F')
-        )
-    } else {
-        listOf(
-            listOf('1', '2', '3', '4', '5'),
-            listOf('6', '7', '8', '9', '0')
-        )
-    }
-
     Column(
         modifier = modifier.fillMaxWidth(),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(4.dp)
     ) {
-        rows.forEach { row ->
+        if (!isHex) {
+            // Decimal: grid 3x4 estilo teclado telefonico
+            val digitRows = listOf(
+                listOf('1', '2', '3'),
+                listOf('4', '5', '6'),
+                listOf('7', '8', '9')
+            )
+            digitRows.forEach { row ->
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    row.forEach { digit ->
+                        val isUsed = digit in usedDigits
+                        HackerKey(
+                            label = digit.toString(),
+                            enabled = !isUsed,
+                            onClick = { onDigit(digit) },
+                            modifier = Modifier.weight(1f),
+                            fillWidth = true
+                        )
+                    }
+                }
+            }
+            // Ultima fila: DEL  0  EXEC
             Row(
+                modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(4.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                row.forEach { digit ->
-                    val isUsed = digit in usedDigits
-                    HackerKey(
-                        label = digit.toString(),
-                        enabled = !isUsed,
-                        onClick = { onDigit(digit) }
-                    )
+                HackerKey(
+                    label = "DEL",
+                    isAction = true,
+                    accentColor = MaterialTheme.colorScheme.secondary,
+                    onClick = onDelete,
+                    modifier = Modifier.weight(1f),
+                    fillWidth = true
+                )
+                HackerKey(
+                    label = "0",
+                    enabled = '0' !in usedDigits,
+                    onClick = { onDigit('0') },
+                    modifier = Modifier.weight(1f),
+                    fillWidth = true
+                )
+                HackerKey(
+                    label = "EXEC",
+                    isAction = true,
+                    isSubmit = true,
+                    enabled = submitEnabled,
+                    accentColor = MaterialTheme.colorScheme.primary,
+                    onClick = onSubmit,
+                    modifier = Modifier.weight(1f),
+                    fillWidth = true
+                )
+            }
+        } else {
+            // Hex: grid 4x4 original
+            val hexRows = listOf(
+                listOf('1', '2', '3', '4'),
+                listOf('5', '6', '7', '8'),
+                listOf('9', '0', 'A', 'B'),
+                listOf('C', 'D', 'E', 'F')
+            )
+            hexRows.forEach { row ->
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    row.forEach { digit ->
+                        val isUsed = digit in usedDigits
+                        HackerKey(
+                            label = digit.toString(),
+                            enabled = !isUsed,
+                            onClick = { onDigit(digit) }
+                        )
+                    }
                 }
             }
-        }
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            HackerKey(
-                label = "DEL",
-                isAction = true,
-                accentColor = MaterialTheme.colorScheme.secondary,
-                onClick = onDelete
-            )
-            HackerKey(
-                label = "EXEC",
-                isAction = true,
-                isSubmit = true,
-                enabled = submitEnabled,
-                accentColor = MaterialTheme.colorScheme.primary,
-                onClick = onSubmit,
-                modifier = Modifier.width(100.dp)
-            )
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                HackerKey(
+                    label = "DEL",
+                    isAction = true,
+                    accentColor = MaterialTheme.colorScheme.secondary,
+                    onClick = onDelete
+                )
+                HackerKey(
+                    label = "EXEC",
+                    isAction = true,
+                    isSubmit = true,
+                    enabled = submitEnabled,
+                    accentColor = MaterialTheme.colorScheme.primary,
+                    onClick = onSubmit,
+                    modifier = Modifier.width(100.dp)
+                )
+            }
         }
     }
 }
@@ -104,6 +156,7 @@ fun HackerKey(
     isAction: Boolean = false,
     isSubmit: Boolean = false,
     enabled: Boolean = true,
+    fillWidth: Boolean = false,
     accentColor: Color = MaterialTheme.colorScheme.primary,
     onClick: () -> Unit = {}
 ) {
@@ -128,7 +181,7 @@ fun HackerKey(
 
     Box(
         modifier = modifier
-            .width(if (isAction) 70.dp else 48.dp)
+            .let { m -> if (fillWidth) m else m.width(if (isAction) 70.dp else 48.dp) }
             .height(48.dp)
             .border(1.dp, borderColor)
             .background(bgColor)

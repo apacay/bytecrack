@@ -1,5 +1,6 @@
 package com.bytecrack.ui.components
 
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -33,12 +34,14 @@ import androidx.compose.ui.unit.sp
 fun TimerBar(
     timeRemaining: Long,
     maxTime: Long = 500L,
+    isUrgent: Boolean = false,
+    isHighlighted: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     val fraction = (timeRemaining.toFloat() / maxTime).coerceIn(0f, 1f)
     val animatedFraction by animateFloatAsState(
         targetValue = fraction,
-        animationSpec = tween(800),
+        animationSpec = tween(400),
         label = "timerBar"
     )
 
@@ -50,6 +53,29 @@ fun TimerBar(
         isMedium -> Color(0xFFFF6600)
         else -> MaterialTheme.colorScheme.primary
     }
+
+    // Escala dinamica: 18sp si urgente (<30s), 16sp normal
+    val targetFontSize = if (isUrgent) 18f else 16f
+    val animatedFontSize by animateFloatAsState(
+        targetValue = targetFontSize,
+        animationSpec = tween(400),
+        label = "timerFontSize"
+    )
+
+    // Highlight: texto y borde se vuelven cyan cuando el bonus de timer esta animando
+    val targetTextColor = if (isHighlighted) Color(0xFF00FFFF) else barColor
+    val animatedTextColor by animateColorAsState(
+        targetValue = targetTextColor,
+        animationSpec = tween(300),
+        label = "timerTextColor"
+    )
+
+    val targetBorderAlpha = if (isHighlighted) 0.9f else 0.45f
+    val animatedBorderAlpha by animateFloatAsState(
+        targetValue = targetBorderAlpha,
+        animationSpec = tween(300),
+        label = "timerBorderAlpha"
+    )
 
     val infiniteTransition = rememberInfiniteTransition(label = "timerPulse")
     val pulseAlpha by infiniteTransition.animateFloat(
@@ -70,17 +96,17 @@ fun TimerBar(
         Text(
             text = "${timeRemaining}s",
             fontFamily = FontFamily.Monospace,
-            fontSize = 11.sp,
+            fontSize = animatedFontSize.sp,
             fontWeight = FontWeight.Bold,
-            color = barColor,
+            color = animatedTextColor,
             modifier = Modifier.widthIn(min = 44.dp)
         )
         Spacer(modifier = Modifier.width(4.dp))
         Box(
             modifier = Modifier
                 .weight(1f)
-                .height(10.dp)
-                .border(1.dp, barColor.copy(alpha = 0.45f))
+                .height(14.dp)
+                .border(1.dp, barColor.copy(alpha = animatedBorderAlpha))
                 .background(barColor.copy(alpha = 0.06f))
         ) {
             Box(

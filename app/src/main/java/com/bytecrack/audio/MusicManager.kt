@@ -40,6 +40,7 @@ class MusicManager @Inject constructor(
 
     private companion object {
         const val MUSIC_VOLUME = 0.5f
+        const val FADE_STEP_MS = 50L
     }
 
     var isMusicEnabled: Boolean = true
@@ -49,6 +50,8 @@ class MusicManager @Inject constructor(
     private var currentTrack: MusicTrack? = null
     private var fadeJob: Job? = null
     private var isPaused: Boolean = false
+    private var currentVolume: Float = MUSIC_VOLUME
+    private var isDimmed: Boolean = false
 
     fun playForLevel(level: Int) = play(MusicTrack.forLevel(level))
 
@@ -70,13 +73,18 @@ class MusicManager @Inject constructor(
     }
 
     fun play(track: MusicTrack) {
-        if (currentTrack == track && player?.isPlaying == true) return
+        if (currentTrack == track && player?.isPlaying == true) {
+            if (isDimmed) restoreVolume()
+            return
+        }
 
         currentTrack = track
 
         if (!isMusicEnabled) return
 
         stopInternal()
+        isDimmed = false
+        currentVolume = MUSIC_VOLUME
 
         player = MediaPlayer.create(context, track.resId).apply {
             isLooping = true
@@ -108,6 +116,45 @@ class MusicManager @Inject constructor(
             stopInternal()
         }
         return isMusicEnabled
+    }
+
+    /** Baja el volumen a 0 sin detener el player (para apreciar SFX de victoria). */
+    fun fadeToSilence(durationMs: Long = 800L) {
+        if (!isMusicEnabled) return
+        fadeJob?.cancel()
+        isDimmed = true
+        fadeJob = scope.launch {
+            val p = player ?: return@launch
+            if (!p.isPlaying) return@launch
+            val steps = (durationMs / FADE_STEP_MS).toInt().coerceAtLeast(1)
+            val decrement = currentVolume / steps
+            repeat(steps) {
+                currentVolume = (currentVolume - decrement).coerceAtLeast(0f)
+                p.setVolume(currentVolume, currentVolume)
+                delay(FADE_STEP_MS)
+            }
+            currentVolume = 0f
+            p.setVolume(0f, 0f)
+        }
+    }
+
+    /** Restaura el volumen tras un fadeToSilence. */
+    fun restoreVolume(durationMs: Long = 600L) {
+        if (!isMusicEnabled || !isDimmed) return
+        fadeJob?.cancel()
+        isDimmed = false
+        fadeJob = scope.launch {
+            val p = player ?: return@launch
+            val steps = (durationMs / FADE_STEP_MS).toInt().coerceAtLeast(1)
+            val increment = (MUSIC_VOLUME - currentVolume) / steps
+            repeat(steps) {
+                currentVolume = (currentVolume + increment).coerceAtMost(MUSIC_VOLUME)
+                p.setVolume(currentVolume, currentVolume)
+                delay(FADE_STEP_MS)
+            }
+            currentVolume = MUSIC_VOLUME
+            p.setVolume(MUSIC_VOLUME, MUSIC_VOLUME)
+        }
     }
 
     fun fadeOut() {
