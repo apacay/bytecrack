@@ -19,6 +19,7 @@ kotlinxCoroutinesPlayServices = "1.10.2"
 playGamesV2 = "20.1.2"
 playServicesAds = "25.0.0"
 playServicesTasks = "18.2.0"
+datastorePreferences = "1.1.1"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -51,6 +52,7 @@ kotlinx-coroutines-play-services = { group = "org.jetbrains.kotlinx", name = "ko
 play-services-games-v2 = { group = "com.google.android.gms", name = "play-services-games-v2", version.ref = "playGamesV2" }
 play-services-ads = { group = "com.google.android.gms", name = "play-services-ads", version.ref = "playServicesAds" }
 play-services-tasks = { group = "com.google.android.gms", name = "play-services-tasks", version.ref = "playServicesTasks" }
+androidx-datastore-preferences = { group = "androidx.datastore", name = "datastore-preferences", version.ref = "datastorePreferences" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

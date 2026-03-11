@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -37,12 +38,14 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.bytecrack.R
+import com.bytecrack.i18n.AppLanguage
 import com.bytecrack.ui.components.GlitchText
 import com.bytecrack.ui.components.MatrixRain
 import com.bytecrack.ui.components.ScanlineOverlay
@@ -52,9 +55,11 @@ import com.bytecrack.ui.components.TerminalText
 fun MainMenuScreen(
     highScore: Int?,
     isMusicEnabled: Boolean,
+    currentLanguage: AppLanguage = AppLanguage.ES,
     onStartGame: () -> Unit,
     onToggleMusic: () -> Unit,
-    onShowLeaderboard: () -> Unit = {}
+    onShowLeaderboard: () -> Unit = {},
+    onShowLanguagePopup: () -> Unit = {}
 ) {
     val showMenu = remember { mutableStateOf(false) }
     val showCredits = remember { mutableStateOf(false) }
@@ -67,23 +72,42 @@ fun MainMenuScreen(
     ) {
         MatrixRain(density = 0.3f)
 
-        // Botón de música — esquina superior derecha
-        Box(
+        Row(
             modifier = Modifier
                 .statusBarsPadding()
                 .align(Alignment.TopEnd)
-                .padding(16.dp)
-                .border(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.3f))
-                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.05f))
-                .clickable { onToggleMusic() }
-                .padding(horizontal = 8.dp, vertical = 6.dp)
+                .padding(16.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            Icon(
-                imageVector = if (isMusicEnabled) Icons.AutoMirrored.Filled.VolumeOff else Icons.AutoMirrored.Filled.VolumeUp,
-                contentDescription = if (isMusicEnabled) "Apagar música" else "Encender música",
-                tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.6f),
-                modifier = Modifier.size(16.dp)
-            )
+            Box(
+                modifier = Modifier
+                    .border(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.3f))
+                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.05f))
+                    .clickable { onShowLanguagePopup() }
+                    .padding(horizontal = 8.dp, vertical = 6.dp)
+            ) {
+                Text(
+                    text = currentLanguage.code.uppercase(),
+                    fontFamily = FontFamily.Monospace,
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.6f)
+                )
+            }
+            Box(
+                modifier = Modifier
+                    .border(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.3f))
+                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.05f))
+                    .clickable { onToggleMusic() }
+                    .padding(horizontal = 8.dp, vertical = 6.dp)
+            ) {
+                Icon(
+                    imageVector = if (isMusicEnabled) Icons.AutoMirrored.Filled.VolumeOff else Icons.AutoMirrored.Filled.VolumeUp,
+                    contentDescription = if (isMusicEnabled) stringResource(R.string.cd_music_off) else stringResource(R.string.cd_music_on),
+                    tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.6f),
+                    modifier = Modifier.size(16.dp)
+                )
+            }
         }
 
         Column(
@@ -108,7 +132,7 @@ fun MainMenuScreen(
             Spacer(modifier = Modifier.height(4.dp))
 
             Text(
-                text = "v1.0 // CODE BREAKER TOOLKIT",
+                text = stringResource(R.string.menu_version),
                 fontFamily = FontFamily.Monospace,
                 fontSize = 10.sp,
                 color = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)
@@ -140,7 +164,7 @@ fun MainMenuScreen(
                 }
 
                 HackerMenuButton(
-                    label = "[ NEW SESSION ]",
+                    label = stringResource(R.string.menu_new_session),
                     onClick = onStartGame
                 )
 
@@ -154,7 +178,7 @@ fun MainMenuScreen(
                 Spacer(modifier = Modifier.height(12.dp))
 
                 HackerMenuButton(
-                    label = "[ CÓMO JUGAR ]",
+                    label = stringResource(R.string.menu_how_to_play),
                     onClick = { showHowToPlay.value = true }
                 )
 
@@ -172,7 +196,6 @@ fun MainMenuScreen(
 
         ScanlineOverlay()
 
-        // Overlay de créditos
         AnimatedVisibility(
             visible = showCredits.value,
             enter = fadeIn(tween(300)),
@@ -181,13 +204,100 @@ fun MainMenuScreen(
             CreditsOverlay(onClose = { showCredits.value = false })
         }
 
-        // Overlay de cómo jugar
         AnimatedVisibility(
             visible = showHowToPlay.value,
             enter = fadeIn(tween(300)),
             exit = fadeOut(tween(300))
         ) {
             HowToPlayOverlay(onClose = { showHowToPlay.value = false })
+        }
+    }
+}
+
+@Composable
+fun LanguagePopup(
+    currentLanguage: AppLanguage,
+    onLanguageSelected: (AppLanguage) -> Unit,
+    onDismiss: () -> Unit
+) {
+    val green = Color(0xFF00FF41)
+    val cyan = Color(0xFF00BFFF)
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black.copy(alpha = 0.92f))
+            .clickable { onDismiss() },
+        contentAlignment = Alignment.Center
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth(0.85f)
+                .border(1.dp, green.copy(alpha = 0.4f))
+                .background(Color.Black)
+                .padding(24.dp)
+                .clickable(enabled = false) { },
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Text(
+                text = stringResource(R.string.language_popup_title),
+                fontFamily = FontFamily.Monospace,
+                fontWeight = FontWeight.Bold,
+                fontSize = 14.sp,
+                letterSpacing = 1.sp,
+                color = green
+            )
+
+            Spacer(modifier = Modifier.height(20.dp))
+
+            AppLanguage.entries.forEach { lang ->
+                val isSelected = lang == currentLanguage
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .border(1.dp, if (isSelected) green else green.copy(alpha = 0.3f))
+                        .background(if (isSelected) green.copy(alpha = 0.1f) else Color.Transparent)
+                        .clickable { onLanguageSelected(lang) }
+                        .padding(horizontal = 16.dp, vertical = 12.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "[${lang.code.uppercase()}] ${lang.displayName}",
+                        fontFamily = FontFamily.Monospace,
+                        fontSize = 14.sp,
+                        color = if (isSelected) green else green.copy(alpha = 0.7f)
+                    )
+                    if (isSelected) {
+                        Text(
+                            text = stringResource(R.string.language_active),
+                            fontFamily = FontFamily.Monospace,
+                            fontSize = 10.sp,
+                            color = cyan
+                        )
+                    }
+                }
+                if (lang != AppLanguage.entries.last()) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                }
+            }
+
+            Spacer(modifier = Modifier.height(20.dp))
+
+            Box(
+                modifier = Modifier
+                    .border(1.dp, green.copy(alpha = 0.3f))
+                    .background(green.copy(alpha = 0.05f))
+                    .clickable { onDismiss() }
+                    .padding(horizontal = 16.dp, vertical = 10.dp)
+            ) {
+                Text(
+                    text = stringResource(R.string.btn_close),
+                    fontFamily = FontFamily.Monospace,
+                    fontSize = 12.sp,
+                    color = green.copy(alpha = 0.7f)
+                )
+            }
         }
     }
 }
@@ -211,7 +321,7 @@ private fun HowToPlayOverlay(onClose: () -> Unit) {
             horizontalAlignment = Alignment.Start
         ) {
             Text(
-                text = "// CÓMO JUGAR ${if (currentSheet.value == 1) "(1/2)" else "(2/2)"}",
+                text = stringResource(R.string.how_to_play_title) + " (${currentSheet.value}/2)",
                 fontFamily = FontFamily.Monospace,
                 fontWeight = FontWeight.Bold,
                 fontSize = 16.sp,
@@ -227,7 +337,7 @@ private fun HowToPlayOverlay(onClose: () -> Unit) {
                     verticalArrangement = Arrangement.spacedBy(0.dp)
                 ) {
                     Text(
-                        text = "Objetivo: adivina el código secreto de 3 dígitos antes de que se acabe el tiempo o los intentos.",
+                        text = stringResource(R.string.how_to_play_objective),
                         fontFamily = FontFamily.Monospace,
                         fontSize = 12.sp,
                         color = MaterialTheme.colorScheme.primary.copy(alpha = 0.9f)
@@ -235,9 +345,9 @@ private fun HowToPlayOverlay(onClose: () -> Unit) {
 
                     Spacer(modifier = Modifier.height(16.dp))
 
-                    HowToPlaySection(title = "CRACKED") {
+                    HowToPlaySection(title = stringResource(R.string.how_to_play_cracked_title)) {
                         Text(
-                            text = "Dígitos en la posición correcta. Si introduces 1 2 3 y el código tiene un 2 en la segunda posición, CRACKED mostrará 1.",
+                            text = stringResource(R.string.how_to_play_cracked_desc),
                             fontFamily = FontFamily.Monospace,
                             fontSize = 11.sp,
                             color = MaterialTheme.colorScheme.secondary.copy(alpha = 0.9f)
@@ -246,9 +356,9 @@ private fun HowToPlayOverlay(onClose: () -> Unit) {
 
                     Spacer(modifier = Modifier.height(12.dp))
 
-                    HowToPlaySection(title = "FOUND") {
+                    HowToPlaySection(title = stringResource(R.string.how_to_play_found_title)) {
                         Text(
-                            text = "Dígitos que están en el código pero en otra posición. Si introduces 1 2 3 y el código tiene un 2 en otra posición, FOUND mostrará 1.",
+                            text = stringResource(R.string.how_to_play_found_desc),
                             fontFamily = FontFamily.Monospace,
                             fontSize = 11.sp,
                             color = MaterialTheme.colorScheme.secondary.copy(alpha = 0.9f)
@@ -257,23 +367,23 @@ private fun HowToPlayOverlay(onClose: () -> Unit) {
 
                     Spacer(modifier = Modifier.height(16.dp))
 
-                    HowToPlaySection(title = "HINTS (Traces)") {
+                    HowToPlaySection(title = stringResource(R.string.how_to_play_hints_title)) {
                         Text(
-                            text = "• Obtienes TRACES viendo anuncios (cada 3 niveles completados).",
+                            text = stringResource(R.string.how_to_play_hints_1),
                             fontFamily = FontFamily.Monospace,
                             fontSize = 11.sp,
                             color = MaterialTheme.colorScheme.primary.copy(alpha = 0.85f)
                         )
                         Spacer(modifier = Modifier.height(6.dp))
                         Text(
-                            text = "• 1 TRACE = Hint: revela un dígito que está en la solución (sin indicar en qué posición).",
+                            text = stringResource(R.string.how_to_play_hints_2),
                             fontFamily = FontFamily.Monospace,
                             fontSize = 11.sp,
                             color = MaterialTheme.colorScheme.primary.copy(alpha = 0.85f)
                         )
                         Spacer(modifier = Modifier.height(6.dp))
                         Text(
-                            text = "• 3 TRACES = Crack: revela el dígito exacto en una posición concreta. Toca un slot vacío para crackear esa posición.",
+                            text = stringResource(R.string.how_to_play_hints_3),
                             fontFamily = FontFamily.Monospace,
                             fontSize = 11.sp,
                             color = MaterialTheme.colorScheme.primary.copy(alpha = 0.85f)
@@ -282,9 +392,9 @@ private fun HowToPlayOverlay(onClose: () -> Unit) {
 
                     Spacer(modifier = Modifier.height(16.dp))
 
-                    HowToPlaySection(title = "EXEC") {
+                    HowToPlaySection(title = stringResource(R.string.how_to_play_exec_title)) {
                         Text(
-                            text = "Pulsa EXEC para enviar tu intento. El sistema te devolverá CRACKED y FOUND según tu combinación.",
+                            text = stringResource(R.string.how_to_play_exec_desc),
                             fontFamily = FontFamily.Monospace,
                             fontSize = 11.sp,
                             color = MaterialTheme.colorScheme.primary.copy(alpha = 0.85f)
@@ -297,7 +407,7 @@ private fun HowToPlayOverlay(onClose: () -> Unit) {
                     verticalArrangement = Arrangement.spacedBy(0.dp)
                 ) {
                     Text(
-                        text = "Cada 10 niveles completados se ofrecen modos de mayor dificultad:",
+                        text = stringResource(R.string.how_to_play_page2_intro),
                         fontFamily = FontFamily.Monospace,
                         fontSize = 12.sp,
                         color = MaterialTheme.colorScheme.primary.copy(alpha = 0.9f)
@@ -305,9 +415,9 @@ private fun HowToPlayOverlay(onClose: () -> Unit) {
 
                     Spacer(modifier = Modifier.height(16.dp))
 
-                    HowToPlaySection(title = "HARD MODE (4 dígitos)") {
+                    HowToPlaySection(title = stringResource(R.string.how_to_play_hard_title)) {
                         Text(
-                            text = "4 dígitos decimales · 5.040 combinaciones · Puntos ×2 · Bonus de tiempo ×2. High risk, high reward.",
+                            text = stringResource(R.string.how_to_play_hard_desc),
                             fontFamily = FontFamily.Monospace,
                             fontSize = 11.sp,
                             color = MaterialTheme.colorScheme.secondary.copy(alpha = 0.9f)
@@ -316,9 +426,9 @@ private fun HowToPlayOverlay(onClose: () -> Unit) {
 
                     Spacer(modifier = Modifier.height(12.dp))
 
-                    HowToPlaySection(title = "IRONMAN (4 dígitos hex)") {
+                    HowToPlaySection(title = stringResource(R.string.how_to_play_ironman_title)) {
                         Text(
-                            text = "4 dígitos hexadecimales (0-9, A-F) · 43.680 combinaciones · Puntos ×4 · Bonus de tiempo ×6. Máximo desafío.",
+                            text = stringResource(R.string.how_to_play_ironman_desc),
                             fontFamily = FontFamily.Monospace,
                             fontSize = 11.sp,
                             color = MaterialTheme.colorScheme.secondary.copy(alpha = 0.9f)
@@ -328,7 +438,7 @@ private fun HowToPlayOverlay(onClose: () -> Unit) {
                     Spacer(modifier = Modifier.height(16.dp))
 
                     Text(
-                        text = "Puedes elegir subir de dificultad o mantener el modo actual en cada nivel múltiplo de 10.",
+                        text = stringResource(R.string.how_to_play_difficulty_choice),
                         fontFamily = FontFamily.Monospace,
                         fontSize = 11.sp,
                         color = MaterialTheme.colorScheme.primary.copy(alpha = 0.85f)
@@ -352,7 +462,7 @@ private fun HowToPlayOverlay(onClose: () -> Unit) {
                             .padding(horizontal = 16.dp, vertical = 10.dp)
                     ) {
                         Text(
-                            text = "[ ATRÁS ]",
+                            text = stringResource(R.string.btn_back),
                             fontFamily = FontFamily.Monospace,
                             fontSize = 12.sp,
                             color = MaterialTheme.colorScheme.primary
@@ -368,7 +478,7 @@ private fun HowToPlayOverlay(onClose: () -> Unit) {
                             .padding(horizontal = 16.dp, vertical = 10.dp)
                     ) {
                         Text(
-                            text = "[ SIGUIENTE ]",
+                            text = stringResource(R.string.btn_next),
                             fontFamily = FontFamily.Monospace,
                             fontSize = 12.sp,
                             color = MaterialTheme.colorScheme.secondary
@@ -384,7 +494,7 @@ private fun HowToPlayOverlay(onClose: () -> Unit) {
                         .padding(horizontal = 16.dp, vertical = 10.dp)
                 ) {
                     Text(
-                        text = "[ CERRAR ]",
+                        text = stringResource(R.string.btn_close),
                         fontFamily = FontFamily.Monospace,
                         fontSize = 12.sp,
                         color = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f)
@@ -427,7 +537,7 @@ private fun CreditsOverlay(onClose: () -> Unit) {
             horizontalAlignment = Alignment.Start
         ) {
             Text(
-                text = "// CREDITS",
+                text = stringResource(R.string.credits_title),
                 fontFamily = FontFamily.Monospace,
                 fontWeight = FontWeight.Bold,
                 fontSize = 16.sp,
@@ -469,7 +579,7 @@ private fun CreditsOverlay(onClose: () -> Unit) {
             Spacer(modifier = Modifier.height(28.dp))
 
             Text(
-                text = "[ TAP ANYWHERE TO CLOSE ]",
+                text = stringResource(R.string.btn_tap_close),
                 fontFamily = FontFamily.Monospace,
                 fontSize = 10.sp,
                 color = MaterialTheme.colorScheme.primary.copy(alpha = 0.3f),

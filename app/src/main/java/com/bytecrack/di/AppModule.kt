@@ -9,6 +9,7 @@ import com.bytecrack.data.remote.PlayGamesRepository
 import com.bytecrack.domain.CodeGenerator
 import com.bytecrack.domain.GuessEvaluator
 import com.bytecrack.domain.TierCalculator
+import com.bytecrack.i18n.LanguageManager
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -50,4 +51,9 @@ object AppModule {
     @Provides
     @Singleton
     fun provideAdManager(): AdManager = AdManager()
+
+    @Provides
+    @Singleton
+    fun provideLanguageManager(@ApplicationContext context: Context): LanguageManager =
+        LanguageManager(context)
 }

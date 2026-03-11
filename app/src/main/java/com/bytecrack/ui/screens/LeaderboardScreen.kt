@@ -8,10 +8,10 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
@@ -29,15 +29,17 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import com.bytecrack.R
 import com.bytecrack.ui.components.GlitchText
-import com.bytecrack.ui.viewmodel.LeaderboardViewModel
 import com.bytecrack.ui.components.MatrixRain
 import com.bytecrack.ui.components.ScanlineOverlay
+import com.bytecrack.ui.viewmodel.LeaderboardViewModel
 
 @Composable
 fun LeaderboardScreen(
@@ -54,14 +56,14 @@ fun LeaderboardScreen(
             onDismissRequest = { showClearConfirm = false },
             title = {
                 Text(
-                    text = "¿Borrar puntuaciones locales?",
+                    text = stringResource(R.string.leaderboard_delete_title),
                     fontFamily = FontFamily.Monospace,
                     color = MaterialTheme.colorScheme.primary
                 )
             },
             text = {
                 Text(
-                    text = "Se eliminarán todas las partidas guardadas localmente. Esta acción no se puede deshacer.",
+                    text = stringResource(R.string.leaderboard_delete_msg),
                     fontFamily = FontFamily.Monospace,
                     fontSize = 12.sp,
                     color = MaterialTheme.colorScheme.primary.copy(alpha = 0.9f)
@@ -72,12 +74,20 @@ fun LeaderboardScreen(
                     viewModel.clearLocalScores()
                     showClearConfirm = false
                 }) {
-                    Text("BORRAR", color = Color(0xFFFF6600), fontFamily = FontFamily.Monospace)
+                    Text(
+                        text = stringResource(R.string.btn_delete),
+                        color = Color(0xFFFF6600),
+                        fontFamily = FontFamily.Monospace
+                    )
                 }
             },
             dismissButton = {
                 TextButton(onClick = { showClearConfirm = false }) {
-                    Text("CANCELAR", color = MaterialTheme.colorScheme.primary, fontFamily = FontFamily.Monospace)
+                    Text(
+                        text = stringResource(R.string.btn_cancel),
+                        color = MaterialTheme.colorScheme.primary,
+                        fontFamily = FontFamily.Monospace
+                    )
                 }
             },
             containerColor = Color.Black,
@@ -114,7 +124,7 @@ fun LeaderboardScreen(
             Spacer(modifier = Modifier.padding(8.dp))
 
             Text(
-                text = "> Clasificación local",
+                text = stringResource(R.string.leaderboard_local),
                 fontFamily = FontFamily.Monospace,
                 fontSize = 12.sp,
                 color = MaterialTheme.colorScheme.primary.copy(alpha = 0.6f)
@@ -124,7 +134,7 @@ fun LeaderboardScreen(
 
             if (uiState.localScores.isEmpty()) {
                 Text(
-                    text = "> Sin partidas registradas",
+                    text = stringResource(R.string.leaderboard_empty),
                     fontFamily = FontFamily.Monospace,
                     fontSize = 12.sp,
                     color = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f),
@@ -156,7 +166,7 @@ fun LeaderboardScreen(
                             color = MaterialTheme.colorScheme.primary
                         )
                         Text(
-                            text = "Nivel ${session.bestLevel}",
+                            text = stringResource(R.string.leaderboard_level, session.bestLevel),
                             fontFamily = FontFamily.Monospace,
                             fontSize = 11.sp,
                             color = MaterialTheme.colorScheme.primary.copy(alpha = 0.6f)
@@ -178,7 +188,7 @@ fun LeaderboardScreen(
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
-                        text = "[ BORRAR PUNTUACIONES LOCALES ]",
+                        text = stringResource(R.string.btn_delete_scores),
                         fontFamily = FontFamily.Monospace,
                         fontSize = 11.sp,
                         color = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f)
@@ -217,7 +227,7 @@ fun LeaderboardScreen(
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
-                            text = "[ VER LEADERBOARD GLOBAL ]",
+                            text = stringResource(R.string.btn_view_global_leaderboard),
                             fontFamily = FontFamily.Monospace,
                             fontWeight = FontWeight.Bold,
                             fontSize = 12.sp,
@@ -239,7 +249,7 @@ fun LeaderboardScreen(
                 contentAlignment = Alignment.Center
             ) {
                 Text(
-                    text = "[ VOLVER ]",
+                    text = stringResource(R.string.btn_back_menu),
                     fontFamily = FontFamily.Monospace,
                     fontSize = 12.sp,
                     color = MaterialTheme.colorScheme.primary.copy(alpha = 0.8f)

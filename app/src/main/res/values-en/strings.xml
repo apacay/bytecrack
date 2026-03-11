@@ -1,0 +1,90 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Main menu -->
+    <string name="menu_new_session">[ NEW SESSION ]</string>
+    <string name="menu_how_to_play">[ HOW TO PLAY ]</string>
+    <string name="menu_language">[ LANGUAGE ]</string>
+    <string name="menu_version">v1.0 // CODE BREAKER TOOLKIT</string>
+
+    <!-- General buttons -->
+    <string name="btn_continue">[ CONTINUE ]</string>
+    <string name="btn_next">[ NEXT ]</string>
+    <string name="btn_back">[ BACK ]</string>
+    <string name="btn_close">[ CLOSE ]</string>
+    <string name="btn_disconnect">[ DISCONNECT ]</string>
+    <string name="btn_watch_ad">[ WATCH AD ]</string>
+    <string name="btn_skip">[ SKIP ]</string>
+    <string name="btn_decline">[ DECLINE ]</string>
+    <string name="btn_give_up">[ GIVE UP ]</string>
+    <string name="btn_override">[ EXECUTE OVERRIDE ]</string>
+    <string name="btn_abandon">[ ABANDON SESSION ]</string>
+    <string name="btn_delete_scores">[ DELETE LOCAL SCORES ]</string>
+    <string name="btn_back_menu">[ BACK ]</string>
+    <string name="btn_delete">[ DELETE ]</string>
+    <string name="btn_cancel">[ CANCEL ]</string>
+    <string name="btn_view_global_leaderboard">[ VIEW GLOBAL LEADERBOARD ]</string>
+    <string name="btn_tap_close">[ TAP TO CLOSE ]</string>
+
+    <!-- How to play -->
+    <string name="how_to_play_title">// HOW TO PLAY</string>
+    <string name="how_to_play_page">"%s (%d/%d)"</string>
+    <string name="how_to_play_objective">Objective: guess the secret 3-digit code before time or attempts run out.</string>
+    <string name="how_to_play_cracked_title">CRACKED</string>
+    <string name="how_to_play_cracked_desc">Digits in the correct position. If you enter 1 2 3 and the code has a 2 in the second position, CRACKED will show 1.</string>
+    <string name="how_to_play_found_title">FOUND</string>
+    <string name="how_to_play_found_desc">Digits that are in the code but in a different position. If you enter 1 2 3 and the code has a 2 elsewhere, FOUND will show 1.</string>
+    <string name="how_to_play_hints_title">HINTS (Traces)</string>
+    <string name="how_to_play_hints_1">• Earn TRACES by watching ads (every 3 completed levels).</string>
+    <string name="how_to_play_hints_2">• 1 TRACE = Hint: reveals a digit that\'s in the solution (without indicating its position).</string>
+    <string name="how_to_play_hints_3">• 3 TRACES = Crack: reveals the exact digit at a specific position. Tap an empty slot to crack that position.</string>
+    <string name="how_to_play_exec_title">EXEC</string>
+    <string name="how_to_play_exec_desc">Press EXEC to submit your guess. The system will return CRACKED and FOUND based on your combination.</string>
+    <string name="how_to_play_page2_intro">Every 10 completed levels, higher difficulty modes are offered:</string>
+    <string name="how_to_play_hard_title">HARD MODE (4 digits)</string>
+    <string name="how_to_play_hard_desc">4 decimal digits · 5,040 combinations · Points ×2 · Time bonus ×2. High risk, high reward.</string>
+    <string name="how_to_play_ironman_title">IRONMAN (4 hex digits)</string>
+    <string name="how_to_play_ironman_desc">4 hexadecimal digits (0-9, A-F) · 43,680 combinations · Points ×4 · Time bonus ×6. Ultimate challenge.</string>
+    <string name="how_to_play_difficulty_choice">You can choose to increase difficulty or keep the current mode at every multiple of 10.</string>
+
+    <!-- Difficulty selection -->
+    <string name="difficulty_hard">HARD MODE</string>
+    <string name="difficulty_hard_desc">3 hex digits · 3,360 combos · Points ×3</string>
+    <string name="difficulty_very_hard">VERY HARD</string>
+    <string name="difficulty_very_hard_desc">4 decimal digits · 5,040 combos · Points ×2</string>
+    <string name="difficulty_ironman_desc">4 hex digits · 43,680 combos · 25 breaches · Points ×20</string>
+    <string name="difficulty_keep">KEEP CURRENT</string>
+    <string name="difficulty_prompt">"Level %d complete // Choose payload:"</string>
+
+    <!-- Leaderboard -->
+    <string name="leaderboard_local">> Local leaderboard</string>
+    <string name="leaderboard_empty">> No sessions recorded</string>
+    <string name="leaderboard_level">"Level %d"</string>
+    <string name="leaderboard_delete_title">Delete local scores?</string>
+    <string name="leaderboard_delete_msg">All locally saved games will be deleted. This action cannot be undone.</string>
+
+    <!-- Rewards and explanations -->
+    <string name="reward_trace_explanation">[A] Earn +1 TRACE (use for HINT or lock a slot)</string>
+    <string name="reward_skip_explanation">[B] Continue without TRACE</string>
+    <string name="reward_watch_ad_hint">Watch a brief ad to earn +1 TRACE</string>
+    <string name="reward_trace_usage_hint">(use for HINT or to crack a slot)</string>
+    <string name="reward_override_available">Emergency override available</string>
+    <string name="reward_override_desc">Burn a borrowed node — single use</string>
+    <string name="reward_continue_question">Continue or end session?</string>
+
+    <!-- Game messages -->
+    <string name="game_tap_slot_to_crack">Tap slot to crack</string>
+    <string name="game_bonus_time">"TIME BONUS: +%ds"</string>
+    <string name="game_points">"POINTS: +%d"</string>
+    <string name="game_continuation">CONTINUATION (reward — no points)</string>
+
+    <!-- Credits -->
+    <string name="credits_title">// CREDITS</string>
+
+    <!-- Language popup -->
+    <string name="language_popup_title">> SELECT LANGUAGE</string>
+    <string name="language_active">◀ ACTIVE</string>
+
+    <!-- Content descriptions -->
+    <string name="cd_music_off">Turn off music</string>
+    <string name="cd_music_on">Turn on music</string>
+</resources>

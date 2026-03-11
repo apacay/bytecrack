@@ -1,6 +1,93 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">ByteCrack</string>
-    <!-- Reemplazar con tu Project ID de Play Console > Play Games Services > Configuration -->
     <string name="game_services_project_id" translatable="false">YOUR_PROJECT_ID</string>
+
+    <!-- Menú principal -->
+    <string name="menu_new_session">[ NUEVA SESIÓN ]</string>
+    <string name="menu_how_to_play">[ CÓMO JUGAR ]</string>
+    <string name="menu_language">[ IDIOMA ]</string>
+    <string name="menu_version">v1.0 // CODE BREAKER TOOLKIT</string>
+
+    <!-- Botones generales -->
+    <string name="btn_continue">[ CONTINUAR ]</string>
+    <string name="btn_next">[ SIGUIENTE ]</string>
+    <string name="btn_back">[ ATRÁS ]</string>
+    <string name="btn_close">[ CERRAR ]</string>
+    <string name="btn_disconnect">[ DESCONECTAR ]</string>
+    <string name="btn_watch_ad">[ VER ANUNCIO ]</string>
+    <string name="btn_skip">[ OMITIR ]</string>
+    <string name="btn_decline">[ RECHAZAR ]</string>
+    <string name="btn_give_up">[ RENDIRSE ]</string>
+    <string name="btn_override">[ EJECUTAR OVERRIDE ]</string>
+    <string name="btn_abandon">[ ABANDONAR SESIÓN ]</string>
+    <string name="btn_delete_scores">[ BORRAR PUNTUACIONES LOCALES ]</string>
+    <string name="btn_back_menu">[ VOLVER ]</string>
+    <string name="btn_delete">[ BORRAR ]</string>
+    <string name="btn_cancel">[ CANCELAR ]</string>
+    <string name="btn_view_global_leaderboard">[ VER LEADERBOARD GLOBAL ]</string>
+    <string name="btn_tap_close">[ TOCA PARA CERRAR ]</string>
+
+    <!-- Cómo jugar -->
+    <string name="how_to_play_title">// CÓMO JUGAR</string>
+    <string name="how_to_play_page">"%s (%d/%d)"</string>
+    <string name="how_to_play_objective">Objetivo: adivina el código secreto de 3 dígitos antes de que se acabe el tiempo o los intentos.</string>
+    <string name="how_to_play_cracked_title">CRACKED</string>
+    <string name="how_to_play_cracked_desc">Dígitos en la posición correcta. Si introduces 1 2 3 y el código tiene un 2 en la segunda posición, CRACKED mostrará 1.</string>
+    <string name="how_to_play_found_title">FOUND</string>
+    <string name="how_to_play_found_desc">Dígitos que están en el código pero en otra posición. Si introduces 1 2 3 y el código tiene un 2 en otra posición, FOUND mostrará 1.</string>
+    <string name="how_to_play_hints_title">HINTS (Traces)</string>
+    <string name="how_to_play_hints_1">• Obtienes TRACES viendo anuncios (cada 3 niveles completados).</string>
+    <string name="how_to_play_hints_2">• 1 TRACE = Hint: revela un dígito que está en la solución (sin indicar en qué posición).</string>
+    <string name="how_to_play_hints_3">• 3 TRACES = Crack: revela el dígito exacto en una posición concreta. Toca un slot vacío para crackear esa posición.</string>
+    <string name="how_to_play_exec_title">EXEC</string>
+    <string name="how_to_play_exec_desc">Pulsa EXEC para enviar tu intento. El sistema te devolverá CRACKED y FOUND según tu combinación.</string>
+    <string name="how_to_play_page2_intro">Cada 10 niveles completados se ofrecen modos de mayor dificultad:</string>
+    <string name="how_to_play_hard_title">HARD MODE (4 dígitos)</string>
+    <string name="how_to_play_hard_desc">4 dígitos decimales · 5.040 combinaciones · Puntos ×2 · Bonus de tiempo ×2. High risk, high reward.</string>
+    <string name="how_to_play_ironman_title">IRONMAN (4 dígitos hex)</string>
+    <string name="how_to_play_ironman_desc">4 dígitos hexadecimales (0-9, A-F) · 43.680 combinaciones · Puntos ×4 · Bonus de tiempo ×6. Máximo desafío.</string>
+    <string name="how_to_play_difficulty_choice">Puedes elegir subir de dificultad o mantener el modo actual en cada nivel múltiplo de 10.</string>
+
+    <!-- Selección de dificultad -->
+    <string name="difficulty_hard">MODO DIFÍCIL</string>
+    <string name="difficulty_hard_desc">3 dígitos hex · 3.360 combos · Puntos ×3</string>
+    <string name="difficulty_very_hard">MUY DIFÍCIL</string>
+    <string name="difficulty_very_hard_desc">4 dígitos decimales · 5.040 combos · Puntos ×2</string>
+    <string name="difficulty_ironman_desc">4 dígitos hex · 43.680 combos · 25 brechas · Puntos ×20</string>
+    <string name="difficulty_keep">MANTENER NIVEL</string>
+    <string name="difficulty_prompt">"Level %d complete // Choose payload:"</string>
+
+    <!-- Leaderboard -->
+    <string name="leaderboard_local">> Clasificación local</string>
+    <string name="leaderboard_empty">> Sin partidas registradas</string>
+    <string name="leaderboard_level">"Nivel %d"</string>
+    <string name="leaderboard_delete_title">¿Borrar puntuaciones locales?</string>
+    <string name="leaderboard_delete_msg">Se eliminarán todas las partidas guardadas localmente. Esta acción no se puede deshacer.</string>
+
+    <!-- Recompensas y explicaciones -->
+    <string name="reward_trace_explanation">[A] Ganas +1 TRACE (usar para HINT o bloquear un slot)</string>
+    <string name="reward_skip_explanation">[B] Continuar sin TRACE</string>
+    <string name="reward_watch_ad_hint">Mira un anuncio breve para ganar +1 TRACE</string>
+    <string name="reward_trace_usage_hint">(usar para HINT o crackear un slot)</string>
+    <string name="reward_override_available">Override de emergencia disponible</string>
+    <string name="reward_override_desc">Quema un nodo prestado — uso único</string>
+    <string name="reward_continue_question">¿Continuar o terminar sesión?</string>
+
+    <!-- Mensajes de juego -->
+    <string name="game_tap_slot_to_crack">Toca slot para crackear</string>
+    <string name="game_bonus_time">"BONUS DE TIEMPO: +%ds"</string>
+    <string name="game_points">"PUNTOS: +%d"</string>
+    <string name="game_continuation">CONTINUACIÓN (reward — sin puntos)</string>
+
+    <!-- Créditos -->
+    <string name="credits_title">// CRÉDITOS</string>
+
+    <!-- Popup de idioma -->
+    <string name="language_popup_title">> SELECT LANGUAGE</string>
+    <string name="language_active">◀ ACTIVO</string>
+
+    <!-- Content descriptions -->
+    <string name="cd_music_off">Apagar música</string>
+    <string name="cd_music_on">Encender música</string>
 </resources>

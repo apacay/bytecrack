@@ -15,6 +15,8 @@ import com.bytecrack.domain.TierCalculator
 import com.bytecrack.domain.model.Difficulty
 import com.bytecrack.domain.model.Guess
 import com.bytecrack.domain.model.Tier
+import com.bytecrack.i18n.AppLanguage
+import com.bytecrack.i18n.LanguageManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -41,7 +43,8 @@ class GameViewModel @Inject constructor(
     private val gameSessionDao: GameSessionDao,
     private val soundManager: SoundManager,
     private val musicManager: MusicManager,
-    private val adManager: AdManager
+    private val adManager: AdManager,
+    private val languageManager: LanguageManager
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(GameUiState())
@@ -83,7 +86,18 @@ class GameViewModel @Inject constructor(
                 )
             }
         }
+        viewModelScope.launch {
+            languageManager.currentLanguage.collect { lang ->
+                _uiState.update { it.copy(currentLanguage = lang) }
+            }
+        }
         musicManager.playForLevel(1)
+    }
+
+    fun setLanguage(language: AppLanguage) {
+        viewModelScope.launch {
+            languageManager.setLanguage(language)
+        }
     }
 
     fun startNewGame() {
@@ -784,6 +798,21 @@ class GameViewModel @Inject constructor(
         _uiState.update { it.copy(isMusicEnabled = enabled) }
     }
 
+    fun showLanguagePopup() {
+        _uiState.update { it.copy(showLanguagePopup = true) }
+    }
+
+    fun dismissLanguagePopup() {
+        _uiState.update { it.copy(showLanguagePopup = false) }
+    }
+
+    fun selectLanguage(language: AppLanguage) {
+        viewModelScope.launch {
+            languageManager.setLanguage(language)
+            _uiState.update { it.copy(showLanguagePopup = false, currentLanguage = language) }
+        }
+    }
+
     fun showLeaderboard() {
         timerJob?.cancel()
         _uiState.update { it.copy(screen = GameScreen.Leaderboard) }
@@ -841,6 +870,7 @@ data class GameUiState(
     val gameOverReason: GameOverReason? = null,
     val highScore: Int? = null,
     val isMusicEnabled: Boolean = true,
+    val currentLanguage: AppLanguage = AppLanguage.ES,
     val offerRewardedAd: Boolean = false,
     val offerRewardedAdFromTimeOut: Boolean = false,
     val rewardAdUsedThisBlock: Boolean = false,
@@ -864,5 +894,7 @@ data class GameUiState(
     /** True cuando la animación del bonus de tiempo ya se mostró (evita re-animación en rotación). */
     val timeBonusDisplayApplied: Boolean = false,
     /** True cuando el bonus de score ya se confirmó (evita re-sumando en rotación). */
-    val scoreBonusDisplayApplied: Boolean = false
+    val scoreBonusDisplayApplied: Boolean = false,
+    /** Mostrar popup de selección de idioma. */
+    val showLanguagePopup: Boolean = false
 )
