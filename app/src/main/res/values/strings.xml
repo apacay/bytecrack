@@ -7,7 +7,7 @@
     <string name="menu_new_session">[ NUEVA SESIÓN ]</string>
     <string name="menu_how_to_play">[ CÓMO JUGAR ]</string>
     <string name="menu_language">[ IDIOMA ]</string>
-    <string name="menu_version">v1.0 // CODE BREAKER TOOLKIT</string>
+    <string name="menu_version">v1.0.1 // CODE BREAKER TOOLKIT</string>
     <string name="menu_leaderboard">[ LEADERBOARD ]</string>
     <string name="menu_credits">[ CREDITS ]</string>
     <string name="menu_high_score">HIGH SCORE: %d pts</string>

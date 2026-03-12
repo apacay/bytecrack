@@ -13,6 +13,11 @@
 *.aab
 .gradle/
 .kotlin/
+
+# Firma de release (no subir a repositorio)
+/app/keystore.properties
+/app/*.keystore
+/app/*.jks
 temp-wrapper/
 gradle-temp/
 
