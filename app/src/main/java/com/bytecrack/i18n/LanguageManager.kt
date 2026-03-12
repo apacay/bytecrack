@@ -7,7 +7,10 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.runBlocking
+import java.util.Locale
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -40,4 +43,24 @@ class LanguageManager @Inject constructor(
         val systemLang = AppLanguage.fromSystemLanguage()
         return systemLang
     }
+
+    /**
+     * Lee el idioma guardado de forma síncrona (para usar en Application/attachBaseContext).
+     * Si no hay preferencia guardada, devuelve el idioma del sistema.
+     */
+    fun getLanguageCodeBlocking(): String = runBlocking {
+        context.languageDataStore.data.first()[languageKey]
+            ?: Locale.getDefault().language
+    }
+
+    /**
+     * Aplica el idioma a nivel de app (para que la siguiente recreación use ese locale).
+     * Debe llamarse tras guardar con setLanguage() cuando el usuario cambia de idioma.
+     */
+    fun applyLocale(language: AppLanguage) {
+        ByteCrackLocaleHolder.appLocale = Locale.forLanguageTag(language.code)
+    }
+
+    fun getLocaleForConfiguration(): Locale =
+        ByteCrackLocaleHolder.appLocale ?: Locale.forLanguageTag(getLanguageCodeBlocking())
 }

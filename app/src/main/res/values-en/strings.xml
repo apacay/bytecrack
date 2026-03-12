@@ -5,6 +5,9 @@
     <string name="menu_how_to_play">[ HOW TO PLAY ]</string>
     <string name="menu_language">[ LANGUAGE ]</string>
     <string name="menu_version">v1.0 // CODE BREAKER TOOLKIT</string>
+    <string name="menu_leaderboard">[ LEADERBOARD ]</string>
+    <string name="menu_credits">[ CREDITS ]</string>
+    <string name="menu_high_score">HIGH SCORE: %d pts</string>
 
     <!-- General buttons -->
     <string name="btn_continue">[ CONTINUE ]</string>
@@ -41,19 +44,21 @@
     <string name="how_to_play_exec_desc">Press EXEC to submit your guess. The system will return CRACKED and FOUND based on your combination.</string>
     <string name="how_to_play_page2_intro">Every 10 completed levels, higher difficulty modes are offered:</string>
     <string name="how_to_play_hard_title">HARD MODE (4 digits)</string>
-    <string name="how_to_play_hard_desc">4 decimal digits · 5,040 combinations · Points ×2 · Time bonus ×2. High risk, high reward.</string>
+    <string name="how_to_play_hard_desc">4 decimal digits · 5,040 combinations · Points ×5 · Time bonus ×4. High risk, high reward.</string>
     <string name="how_to_play_ironman_title">IRONMAN (4 hex digits)</string>
-    <string name="how_to_play_ironman_desc">4 hexadecimal digits (0-9, A-F) · 43,680 combinations · Points ×4 · Time bonus ×6. Ultimate challenge.</string>
+    <string name="how_to_play_ironman_desc">4 hexadecimal digits (0-9, A-F) · 43,680 combinations · Points ×20 · Time bonus ×10. Ultimate challenge.</string>
     <string name="how_to_play_difficulty_choice">You can choose to increase difficulty or keep the current mode at every multiple of 10.</string>
 
     <!-- Difficulty selection -->
     <string name="difficulty_hard">HARD MODE</string>
-    <string name="difficulty_hard_desc">3 hex digits · 3,360 combos · Points ×3</string>
+    <string name="difficulty_hard_desc">3 hex digits · 3,360 combos · Points ×2 · Time bonus ×2</string>
     <string name="difficulty_very_hard">VERY HARD</string>
-    <string name="difficulty_very_hard_desc">4 decimal digits · 5,040 combos · Points ×2</string>
-    <string name="difficulty_ironman_desc">4 hex digits · 43,680 combos · 25 breaches · Points ×20</string>
+    <string name="difficulty_very_hard_desc">4 decimal digits · 5,040 combos · Points ×5 · Time bonus ×4</string>
+    <string name="difficulty_ironman_desc">4 hex digits · 43,680 combos · 25 breaches · Points ×20 · Time bonus ×10</string>
+    <string name="difficulty_ironman" translatable="false">IRONMAN</string>
     <string name="difficulty_keep">KEEP CURRENT</string>
     <string name="difficulty_prompt">"Level %d complete // Choose payload:"</string>
+    <string name="difficulty_keep_desc">"%1$s · %2$d digits · ×%3$d"</string>
 
     <!-- Leaderboard -->
     <string name="leaderboard_local">> Local leaderboard</string>
@@ -65,10 +70,20 @@
     <!-- Rewards and explanations -->
     <string name="reward_trace_explanation">[A] Earn +1 TRACE (use for HINT or lock a slot)</string>
     <string name="reward_skip_explanation">[B] Continue without TRACE</string>
+    <string name="reward_skip_explanation_at_start">[B] Start without TRACE</string>
     <string name="reward_watch_ad_hint">Watch a brief ad to earn +1 TRACE</string>
     <string name="reward_trace_usage_hint">(use for HINT or to crack a slot)</string>
+    <string name="reward_btn_watch_ad">[A] Watch ad</string>
+    <string name="reward_btn_skip">[B] Skip</string>
+    <string name="reward_btn_continue">[B] Continue</string>
+    <string name="reward_btn_give_up">[B] Give up</string>
+    <string name="reward_btn_override">[A] Execute override</string>
+    <string name="reward_btn_abandon">[B] Abandon session</string>
     <string name="reward_override_available">Emergency override available</string>
-    <string name="reward_override_desc">Burn a borrowed node — single use</string>
+    <string name="reward_override_desc">In exchange for watching an ad: +%1$d extra attempts and +%2$d s on the timer. Single use.</string>
+    <string name="reward_override_short_desc">In exchange for watching an ad.</string>
+    <string name="reward_abandon_desc">[B] Ends the game</string>
+    <string name="reward_offer_breach_desc">[A] +%1$d extra attempts, +%2$d s on timer</string>
     <string name="reward_continue_question">Continue or end session?</string>
 
     <!-- Game messages -->
@@ -87,4 +102,16 @@
     <!-- Content descriptions -->
     <string name="cd_music_off">Turn off music</string>
     <string name="cd_music_on">Turn on music</string>
+
+    <!-- Exit during play popup -->
+    <string name="exit_during_play_title">[ WARNING ]</string>
+    <string name="exit_during_play_message">Your node penetration progress will be lost.</string>
+    <string name="exit_during_play_btn_exit">Exit</string>
+    <string name="exit_during_play_btn_return">Return to game</string>
+
+    <!-- Menu: continue / new session -->
+    <string name="menu_continue_session">[ CONTINUE SESSION ]</string>
+    <string name="new_session_confirm_title">[ NEW SESSION ]</string>
+    <string name="new_session_confirm_message">Current session will be lost. Do you want to continue?</string>
+    <string name="new_session_confirm_continue">Continue</string>
 </resources>

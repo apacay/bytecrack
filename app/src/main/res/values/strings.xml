@@ -8,6 +8,9 @@
     <string name="menu_how_to_play">[ CÓMO JUGAR ]</string>
     <string name="menu_language">[ IDIOMA ]</string>
     <string name="menu_version">v1.0 // CODE BREAKER TOOLKIT</string>
+    <string name="menu_leaderboard">[ LEADERBOARD ]</string>
+    <string name="menu_credits">[ CREDITS ]</string>
+    <string name="menu_high_score">HIGH SCORE: %d pts</string>
 
     <!-- Botones generales -->
     <string name="btn_continue">[ CONTINUAR ]</string>
@@ -44,19 +47,21 @@
     <string name="how_to_play_exec_desc">Pulsa EXEC para enviar tu intento. El sistema te devolverá CRACKED y FOUND según tu combinación.</string>
     <string name="how_to_play_page2_intro">Cada 10 niveles completados se ofrecen modos de mayor dificultad:</string>
     <string name="how_to_play_hard_title">HARD MODE (4 dígitos)</string>
-    <string name="how_to_play_hard_desc">4 dígitos decimales · 5.040 combinaciones · Puntos ×2 · Bonus de tiempo ×2. High risk, high reward.</string>
+    <string name="how_to_play_hard_desc">4 dígitos decimales · 5.040 combinaciones · Puntos ×5 · Bonus de tiempo ×4. High risk, high reward.</string>
     <string name="how_to_play_ironman_title">IRONMAN (4 dígitos hex)</string>
-    <string name="how_to_play_ironman_desc">4 dígitos hexadecimales (0-9, A-F) · 43.680 combinaciones · Puntos ×4 · Bonus de tiempo ×6. Máximo desafío.</string>
+    <string name="how_to_play_ironman_desc">4 dígitos hexadecimales (0-9, A-F) · 43.680 combinaciones · Puntos ×20 · Bonus de tiempo ×10. Máximo desafío.</string>
     <string name="how_to_play_difficulty_choice">Puedes elegir subir de dificultad o mantener el modo actual en cada nivel múltiplo de 10.</string>
 
     <!-- Selección de dificultad -->
     <string name="difficulty_hard">MODO DIFÍCIL</string>
-    <string name="difficulty_hard_desc">3 dígitos hex · 3.360 combos · Puntos ×3</string>
+    <string name="difficulty_hard_desc">3 dígitos hex · 3.360 combos · Puntos ×2 · Bonus tiempo ×2</string>
     <string name="difficulty_very_hard">MUY DIFÍCIL</string>
-    <string name="difficulty_very_hard_desc">4 dígitos decimales · 5.040 combos · Puntos ×2</string>
-    <string name="difficulty_ironman_desc">4 dígitos hex · 43.680 combos · 25 brechas · Puntos ×20</string>
+    <string name="difficulty_very_hard_desc">4 dígitos decimales · 5.040 combos · Puntos ×5 · Bonus tiempo ×4</string>
+    <string name="difficulty_ironman_desc">4 dígitos hex · 43.680 combos · 25 brechas · Puntos ×20 · Bonus tiempo ×10</string>
+    <string name="difficulty_ironman" translatable="false">IRONMAN</string>
     <string name="difficulty_keep">MANTENER NIVEL</string>
     <string name="difficulty_prompt">"Level %d complete // Choose payload:"</string>
+    <string name="difficulty_keep_desc">"%1$s · %2$d dígitos · ×%3$d"</string>
 
     <!-- Leaderboard -->
     <string name="leaderboard_local">> Clasificación local</string>
@@ -68,10 +73,20 @@
     <!-- Recompensas y explicaciones -->
     <string name="reward_trace_explanation">[A] Ganas +1 TRACE (usar para HINT o bloquear un slot)</string>
     <string name="reward_skip_explanation">[B] Continuar sin TRACE</string>
+    <string name="reward_skip_explanation_at_start">[B] Empezar sin TRACE</string>
     <string name="reward_watch_ad_hint">Mira un anuncio breve para ganar +1 TRACE</string>
     <string name="reward_trace_usage_hint">(usar para HINT o crackear un slot)</string>
+    <string name="reward_btn_watch_ad">[A] Ver anuncio</string>
+    <string name="reward_btn_skip">[B] Omitir</string>
+    <string name="reward_btn_continue">[B] Continuar</string>
+    <string name="reward_btn_give_up">[B] Rendirse</string>
+    <string name="reward_btn_override">[A] Ejecutar override</string>
+    <string name="reward_btn_abandon">[B] Abandonar sesión</string>
     <string name="reward_override_available">Override de emergencia disponible</string>
-    <string name="reward_override_desc">Quema un nodo prestado — uso único</string>
+    <string name="reward_override_desc">A cambio de ver un anuncio: +%1$d intentos extra y +%2$d s al timer. Uso único.</string>
+    <string name="reward_override_short_desc">A cambio de ver un anuncio.</string>
+    <string name="reward_abandon_desc">[B] Termina la partida</string>
+    <string name="reward_offer_breach_desc">[A] +%1$d intentos extra, +%2$d s al timer</string>
     <string name="reward_continue_question">¿Continuar o terminar sesión?</string>
 
     <!-- Mensajes de juego -->
@@ -84,10 +99,22 @@
     <string name="credits_title">// CRÉDITOS</string>
 
     <!-- Popup de idioma -->
-    <string name="language_popup_title">> SELECT LANGUAGE</string>
+    <string name="language_popup_title">> SELECCIONAR IDIOMA</string>
     <string name="language_active">◀ ACTIVO</string>
 
     <!-- Content descriptions -->
     <string name="cd_music_off">Apagar música</string>
     <string name="cd_music_on">Encender música</string>
+
+    <!-- Popup ESC durante partida -->
+    <string name="exit_during_play_title">[ AVISO ]</string>
+    <string name="exit_during_play_message">Tu progreso de penetración en los nodos se perderá.</string>
+    <string name="exit_during_play_btn_exit">Salir</string>
+    <string name="exit_during_play_btn_return">Volver al juego</string>
+
+    <!-- Menú: continuar / nueva sesión -->
+    <string name="menu_continue_session">[ CONTINUE SESSION ]</string>
+    <string name="new_session_confirm_title">[ NUEVA SESIÓN ]</string>
+    <string name="new_session_confirm_message">Se perderá la sesión actual. ¿Desea continuar?</string>
+    <string name="new_session_confirm_continue">Continuar</string>
 </resources>

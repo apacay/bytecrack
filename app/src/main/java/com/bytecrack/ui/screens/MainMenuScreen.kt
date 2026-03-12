@@ -56,7 +56,10 @@ fun MainMenuScreen(
     highScore: Int?,
     isMusicEnabled: Boolean,
     currentLanguage: AppLanguage = AppLanguage.ES,
+    hasSavedSession: Boolean = false,
     onStartGame: () -> Unit,
+    onContinueSession: () -> Unit = {},
+    onConfirmNewSession: () -> Unit = {},
     onToggleMusic: () -> Unit,
     onShowLeaderboard: () -> Unit = {},
     onShowLanguagePopup: () -> Unit = {}
@@ -64,6 +67,7 @@ fun MainMenuScreen(
     val showMenu = remember { mutableStateOf(false) }
     val showCredits = remember { mutableStateOf(false) }
     val showHowToPlay = remember { mutableStateOf(false) }
+    val showNewSessionConfirm = remember { mutableStateOf(false) }
 
     Box(
         modifier = Modifier
@@ -102,7 +106,7 @@ fun MainMenuScreen(
                     .padding(horizontal = 8.dp, vertical = 6.dp)
             ) {
                 Icon(
-                    imageVector = if (isMusicEnabled) Icons.AutoMirrored.Filled.VolumeOff else Icons.AutoMirrored.Filled.VolumeUp,
+                    imageVector = if (isMusicEnabled) Icons.AutoMirrored.Filled.VolumeUp else Icons.AutoMirrored.Filled.VolumeOff,
                     contentDescription = if (isMusicEnabled) stringResource(R.string.cd_music_off) else stringResource(R.string.cd_music_on),
                     tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.6f),
                     modifier = Modifier.size(16.dp)
@@ -154,7 +158,7 @@ fun MainMenuScreen(
             if (showMenu.value) {
                 if (highScore != null && highScore > 0) {
                     Text(
-                        text = "HIGH SCORE: $highScore pts",
+                        text = stringResource(R.string.menu_high_score, highScore),
                         fontFamily = FontFamily.Monospace,
                         fontSize = 14.sp,
                         fontWeight = FontWeight.Bold,
@@ -163,15 +167,26 @@ fun MainMenuScreen(
                     Spacer(modifier = Modifier.height(24.dp))
                 }
 
+                if (hasSavedSession) {
+                    HackerMenuButton(
+                        label = stringResource(R.string.menu_continue_session),
+                        onClick = onContinueSession
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                }
+
                 HackerMenuButton(
                     label = stringResource(R.string.menu_new_session),
-                    onClick = onStartGame
+                    onClick = {
+                        if (hasSavedSession) showNewSessionConfirm.value = true
+                        else onStartGame()
+                    }
                 )
 
                 Spacer(modifier = Modifier.height(12.dp))
 
                 HackerMenuButton(
-                    label = "[ LEADERBOARD ]",
+                    label = stringResource(R.string.menu_leaderboard),
                     onClick = onShowLeaderboard
                 )
 
@@ -185,7 +200,7 @@ fun MainMenuScreen(
                 Spacer(modifier = Modifier.height(12.dp))
 
                 Text(
-                    text = "[ CREDITS ]",
+                    text = stringResource(R.string.menu_credits),
                     fontFamily = FontFamily.Monospace,
                     fontSize = 12.sp,
                     color = MaterialTheme.colorScheme.primary.copy(alpha = 0.4f),
@@ -210,6 +225,20 @@ fun MainMenuScreen(
             exit = fadeOut(tween(300))
         ) {
             HowToPlayOverlay(onClose = { showHowToPlay.value = false })
+        }
+
+        AnimatedVisibility(
+            visible = showNewSessionConfirm.value,
+            enter = fadeIn(tween(300)),
+            exit = fadeOut(tween(300))
+        ) {
+            NewSessionConfirmOverlay(
+                onConfirm = {
+                    showNewSessionConfirm.value = false
+                    onConfirmNewSession()
+                },
+                onDismiss = { showNewSessionConfirm.value = false }
+            )
         }
     }
 }
@@ -297,6 +326,87 @@ fun LanguagePopup(
                     fontSize = 12.sp,
                     color = green.copy(alpha = 0.7f)
                 )
+            }
+        }
+    }
+}
+
+@Composable
+private fun NewSessionConfirmOverlay(
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    val green = Color(0xFF00FF41)
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black.copy(alpha = 0.92f))
+            .clickable { onDismiss() },
+        contentAlignment = Alignment.Center
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth(0.85f)
+                .border(1.dp, green.copy(alpha = 0.4f))
+                .background(Color.Black)
+                .padding(24.dp)
+                .clickable(enabled = false) { },
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Text(
+                text = stringResource(R.string.new_session_confirm_title),
+                fontFamily = FontFamily.Monospace,
+                fontWeight = FontWeight.Bold,
+                fontSize = 14.sp,
+                letterSpacing = 1.sp,
+                color = green
+            )
+            Spacer(modifier = Modifier.height(16.dp))
+            Text(
+                text = stringResource(R.string.new_session_confirm_message),
+                fontFamily = FontFamily.Monospace,
+                fontSize = 12.sp,
+                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.9f)
+            )
+            Spacer(modifier = Modifier.height(24.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .border(1.dp, green.copy(alpha = 0.3f))
+                        .background(green.copy(alpha = 0.05f))
+                        .clickable { onDismiss() }
+                        .padding(horizontal = 16.dp, vertical = 10.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = stringResource(R.string.btn_cancel),
+                        fontFamily = FontFamily.Monospace,
+                        fontSize = 12.sp,
+                        color = green.copy(alpha = 0.7f)
+                    )
+                }
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .border(1.dp, green.copy(alpha = 0.5f))
+                        .background(green.copy(alpha = 0.1f))
+                        .clickable { onConfirm() }
+                        .padding(horizontal = 16.dp, vertical = 10.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = stringResource(R.string.new_session_confirm_continue),
+                        fontFamily = FontFamily.Monospace,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = green
+                    )
+                }
             }
         }
     }

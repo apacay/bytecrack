@@ -1,6 +1,7 @@
 package com.bytecrack.ads
 
 import android.app.Activity
+import android.util.Log
 import com.google.android.gms.ads.AdRequest
 import com.google.android.gms.ads.FullScreenContentCallback
 import com.google.android.gms.ads.LoadAdError
@@ -19,6 +20,7 @@ import javax.inject.Singleton
 class AdManager @Inject constructor() {
 
     companion object {
+        private const val TAG_REWARDED = "ByteCrack.RewardedAd"
         private const val INTERSTITIAL_AD_UNIT_ID = "ca-app-pub-3940256099942544/1033173712"
         private const val REWARDED_AD_UNIT_ID = "ca-app-pub-3940256099942544/5224354917"
     }
@@ -63,7 +65,7 @@ class AdManager @Inject constructor() {
         return true
     }
 
-    fun loadRewarded(activity: Activity, onLoaded: (() -> Unit)? = null) {
+    fun loadRewarded(activity: Activity, onLoaded: (() -> Unit)? = null, onFailed: (() -> Unit)? = null) {
         RewardedAd.load(
             activity,
             REWARDED_AD_UNIT_ID,
@@ -76,6 +78,8 @@ class AdManager @Inject constructor() {
 
                 override fun onAdFailedToLoad(error: LoadAdError) {
                     rewardedAd = null
+                    Log.e(TAG_REWARDED, "Rewarded ad failed to load: code=${error.code} domain=${error.domain} message=${error.message}")
+                    onFailed?.invoke()
                 }
             }
         )

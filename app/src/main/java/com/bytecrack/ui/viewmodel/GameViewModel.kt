@@ -56,6 +56,10 @@ class GameViewModel @Inject constructor(
 
     /** True cuando el usuario ya ganó la recompensa del ad pero el ad sigue en primer plano; aplicar estado al cerrar. */
     private var earnedRewardPendingAdDismiss = false
+    /** True cuando el usuario ganó el TRACE del anuncio pero el ad sigue en primer plano; continuar al cerrar. */
+    private var earnedTraceRewardPendingDismiss = false
+    /** Si earnedTraceRewardPendingDismiss, true = era oferta al inicio (solo arrancar timer), false = continuar al siguiente nivel. */
+    private var earnedTraceWasAtStart = false
 
     // Flags para diferir reanudar música/timer hasta que la Activity vuelva al primer plano
     private var pendingMusicResume = false
@@ -102,11 +106,13 @@ class GameViewModel @Inject constructor(
 
     fun startNewGame() {
         timerJob?.cancel()
+        val current = _uiState.value
         viewModelScope.launch {
             _uiState.value = GameUiState(
                 screen = GameScreen.MainMenu,
                 highScore = gameSessionDao.getHighScore(),
-                isMusicEnabled = musicManager.isMusicEnabled
+                isMusicEnabled = musicManager.isMusicEnabled,
+                currentLanguage = current.currentLanguage
             )
         }
     }
@@ -116,6 +122,7 @@ class GameViewModel @Inject constructor(
         levelStartTime = System.currentTimeMillis()
         val secretCode = codeGenerator.generate(Difficulty.NORMAL)
         musicManager.playForLevel(1)
+        val current = _uiState.value
         _uiState.value = GameUiState(
             screen = GameScreen.Game,
             showLevelIntro = true,
@@ -128,6 +135,7 @@ class GameViewModel @Inject constructor(
             totalScore = 0,
             difficulty = Difficulty.NORMAL,
             isMusicEnabled = musicManager.isMusicEnabled,
+            currentLanguage = current.currentLanguage,
             traceCount = 0,
             levelsPlayedThisSession = 0,
             levelsCompletedSinceLastTraceOffer = 0
@@ -255,7 +263,8 @@ class GameViewModel @Inject constructor(
                     pendingRewardAdFromTimeOut = false,
                     offerRewardedAd = true,
                     offerRewardedAdFromTimeOut = fromTimeOut,
-                    rewardAdOriginalReason = reason
+                    rewardAdOriginalReason = reason,
+                    watchAdButtonPressed = false
                 )
             }
         } else {
@@ -271,6 +280,7 @@ class GameViewModel @Inject constructor(
     }
 
     fun requestRewardedAd(activity: Activity) {
+        _uiState.update { it.copy(watchAdButtonPressed = true) }
         musicManager.pause()
         if (adManager.showRewarded(
                 activity,
@@ -283,14 +293,9 @@ class GameViewModel @Inject constructor(
                     if (earnedRewardPendingAdDismiss) {
                         earnedRewardPendingAdDismiss = false
                         val state = _uiState.value
-                        val n = state.maxAttempts - state.attemptsRemaining
-                        val m = state.maxAttempts
-                        val p = m / 2
-                        val (newAttempts, newMax) = if (n < p) {
-                            state.attemptsRemaining to state.maxAttempts
-                        } else {
-                            p to (n + p)
-                        }
+                        val ext = state.difficulty.rewardAdBreachExtension
+                        val newMax = state.maxAttempts + ext
+                        val newAttempts = state.attemptsRemaining + ext
                         _uiState.update {
                             it.copy(
                                 attemptsRemaining = newAttempts,
@@ -322,7 +327,8 @@ class GameViewModel @Inject constructor(
                 offerRewardedAd = false,
                 offerRewardedAdFromTimeOut = false,
                 showFailureTransition = true,
-                pendingGameOverReason = reason
+                pendingGameOverReason = reason,
+                watchAdButtonPressed = false
             )
         }
     }
@@ -331,7 +337,7 @@ class GameViewModel @Inject constructor(
         _uiState.update {
             it.copy(
                 showEscapeTransition = false,
-                showPotentialGameOverAfterReward = true
+                showTransitionBackToGame = true
             )
         }
         soundManager.playGameOver()
@@ -403,37 +409,50 @@ class GameViewModel @Inject constructor(
     }
 
     fun requestTraceAd(activity: Activity) {
+        _uiState.update { it.copy(watchAdButtonPressed = true) }
         musicManager.pause()
-        if (adManager.showRewarded(
-                activity,
-                onReward = {
-                    val wasAtStart = _uiState.value.showTraceAdOfferAtStart
-                    _uiState.update {
-                        it.copy(
-                            traceCount = it.traceCount + 1,
-                            showTraceAdOffer = false,
-                            showTraceAdOfferAtStart = false
-                        )
-                    }
-                    if (wasAtStart) {
-                        // Diferir el inicio del timer hasta que la Activity vuelva al primer plano
-                        pendingTimerStart = true
-                    } else {
-                        continueToNextLevel()
-                    }
-                },
-                onDismissed = {
-                    pendingMusicResume = true
-                    if (_uiState.value.showTraceAdOffer || _uiState.value.showTraceAdOfferAtStart) {
-                        skipTraceOffer()
-                    }
+        val onReward = {
+            val wasAtStart = _uiState.value.showTraceAdOfferAtStart
+            _uiState.update {
+                it.copy(
+                    traceCount = it.traceCount + 1,
+                    showTraceAdOffer = false,
+                    showTraceAdOfferAtStart = false
+                )
+            }
+            // No llamar continueToNextLevel() ni startTimer aquí: el anuncio sigue en primer plano. Se hará en onDismissed.
+            earnedTraceRewardPendingDismiss = true
+            earnedTraceWasAtStart = wasAtStart
+        }
+        val onDismissed = {
+            pendingMusicResume = true
+            if (earnedTraceRewardPendingDismiss) {
+                earnedTraceRewardPendingDismiss = false
+                if (earnedTraceWasAtStart) {
+                    pendingTimerStart = true
+                } else {
+                    continueToNextLevel()
                 }
-            )
-        ) {
+            } else if (_uiState.value.showTraceAdOffer || _uiState.value.showTraceAdOfferAtStart) {
+                skipTraceOffer()
+            }
+        }
+        if (adManager.showRewarded(activity, onReward, onDismissed)) {
             return
         }
-        pendingMusicResume = true
-        skipTraceOffer()
+        // Anuncio aún no cargado: cargar y mostrar cuando esté listo (niveles 3, 6, etc.)
+        adManager.loadRewarded(
+            activity,
+            onLoaded = {
+                if (adManager.showRewarded(activity, onReward, onDismissed)) return@loadRewarded
+                pendingMusicResume = true
+                skipTraceOffer()
+            },
+            onFailed = {
+                pendingMusicResume = true
+                skipTraceOffer()
+            }
+        )
     }
 
     fun skipTraceOffer() {
@@ -441,7 +460,8 @@ class GameViewModel @Inject constructor(
         _uiState.update {
             it.copy(
                 showTraceAdOffer = false,
-                showTraceAdOfferAtStart = false
+                showTraceAdOfferAtStart = false,
+                watchAdButtonPressed = false
             )
         }
         if (wasAtStart) {
@@ -481,34 +501,44 @@ class GameViewModel @Inject constructor(
     }
 
     fun requestTraceAdForPurchase(activity: Activity) {
+        _uiState.update { it.copy(watchAdButtonPressed = true) }
         musicManager.pause()
-        if (adManager.showRewarded(
-                activity,
-                onReward = {
-                    _uiState.update {
-                        it.copy(
-                            traceCount = it.traceCount + 1,
-                            offerTraceAd = false
-                        )
-                    }
-                    pendingTimerResume = true
-                },
-                onDismissed = {
-                    pendingMusicResume = true
-                    _uiState.update { it.copy(offerTraceAd = false) }
-                    pendingTimerResume = true
-                }
-            )
-        ) {
+        val onReward = {
+            _uiState.update {
+                it.copy(
+                    traceCount = it.traceCount + 1,
+                    offerTraceAd = false
+                )
+            }
+            pendingTimerResume = true
+        }
+        val onDismissed = {
+            pendingMusicResume = true
+            _uiState.update { it.copy(offerTraceAd = false) }
+            pendingTimerResume = true
+        }
+        if (adManager.showRewarded(activity, onReward, onDismissed)) {
             return
         }
-        pendingMusicResume = true
-        _uiState.update { it.copy(offerTraceAd = false) }
-        pendingTimerResume = true
+        // Anuncio aún no cargado: cargar y mostrar cuando esté listo
+        adManager.loadRewarded(
+            activity,
+            onLoaded = {
+                if (adManager.showRewarded(activity, onReward, onDismissed)) return@loadRewarded
+                pendingMusicResume = true
+                _uiState.update { it.copy(offerTraceAd = false, watchAdButtonPressed = false) }
+                pendingTimerResume = true
+            },
+            onFailed = {
+                pendingMusicResume = true
+                _uiState.update { it.copy(offerTraceAd = false, watchAdButtonPressed = false) }
+                pendingTimerResume = true
+            }
+        )
     }
 
     fun declineTraceAd() {
-        _uiState.update { it.copy(offerTraceAd = false) }
+        _uiState.update { it.copy(offerTraceAd = false, watchAdButtonPressed = false) }
         resumeTimer()
     }
 
@@ -545,7 +575,7 @@ class GameViewModel @Inject constructor(
         if (state.showTraceAdOffer || state.showTraceAdOfferAtStart) return
 
         val newLevel = state.level + 1
-        val effectiveBonusSeconds = tier.bonusSeconds * state.difficulty.pointMultiplier
+        val effectiveBonusSeconds = tier.bonusSeconds * state.difficulty.timeBonusMultiplier
         val newTime = state.timeRemainingSeconds + effectiveBonusSeconds
 
         if (state.level % DIFFICULTY_CHOICE_INTERVAL == 0) {
@@ -600,7 +630,8 @@ class GameViewModel @Inject constructor(
                 showTraceAdOffer = false,
                 offerTraceAd = false,
                 timeBonusDisplayApplied = false,
-                scoreBonusDisplayApplied = false
+                scoreBonusDisplayApplied = false,
+                watchAdButtonPressed = false
             )
         }
         scheduleLevelIntroDismiss()
@@ -614,7 +645,8 @@ class GameViewModel @Inject constructor(
             _uiState.update {
                 it.copy(
                     showLevelIntro = false,
-                    showTraceAdOfferAtStart = showTraceOfferAtStart
+                    showTraceAdOfferAtStart = showTraceOfferAtStart,
+                    watchAdButtonPressed = false
                 )
             }
             if (!showTraceOfferAtStart) {
@@ -644,19 +676,22 @@ class GameViewModel @Inject constructor(
                 isLevelComplete = true,
                 showVictoryPenetration = true,
                 lastTier = tier,
-                // totalScore NO se modifica aqui; queda en el valor acumulado anterior.
-                // lastLevelPoints guarda los puntos pendientes que la animacion del odometro sumara.
-                lastLevelPoints = pointsToAdd,
+                // lastLevelPoints siempre muestra los puntos del tier en la UI; solo se suman a totalScore si !wonViaReward (en confirmScoreBonus).
+                lastLevelPoints = points,
                 levelsPlayedThisSession = it.levelsPlayedThisSession + 1,
                 levelsCompletedSinceLastTraceOffer = if (showTraceOfferFromInterval) 0 else newLevelsCompleted,
-                showTraceAdOffer = showTraceOffer
+                showTraceAdOffer = showTraceOffer,
+                watchAdButtonPressed = false
             )
         }
     }
 
     // Llamado desde la UI al terminar la animacion del odometro de score.
     fun confirmScoreBonus() {
-        _uiState.update { it.copy(totalScore = it.totalScore + it.lastLevelPoints) }
+        _uiState.update { state ->
+            val toAdd = if (state.wonViaReward) 0 else state.lastLevelPoints
+            state.copy(totalScore = state.totalScore + toAdd)
+        }
     }
 
     /** Marca que la animación del bonus de tiempo ya se mostró (para no re-animar en rotación). */
@@ -809,8 +844,19 @@ class GameViewModel @Inject constructor(
     fun selectLanguage(language: AppLanguage) {
         viewModelScope.launch {
             languageManager.setLanguage(language)
-            _uiState.update { it.copy(showLanguagePopup = false, currentLanguage = language) }
+            languageManager.applyLocale(language)
+            _uiState.update {
+                it.copy(
+                    showLanguagePopup = false,
+                    currentLanguage = language,
+                    needRecreate = true
+                )
+            }
         }
+    }
+
+    fun ackRecreate() {
+        _uiState.update { it.copy(needRecreate = false) }
     }
 
     fun showLeaderboard() {
@@ -820,16 +866,140 @@ class GameViewModel @Inject constructor(
 
     fun backToMenu() {
         timerJob?.cancel()
+        val current = _uiState.value
         viewModelScope.launch {
             _uiState.value = GameUiState(
                 screen = GameScreen.MainMenu,
                 isGameOver = false,
                 isLevelComplete = false,
                 highScore = gameSessionDao.getHighScore(),
-                isMusicEnabled = musicManager.isMusicEnabled
+                isMusicEnabled = musicManager.isMusicEnabled,
+                savedSession = current.savedSession,
+                currentLanguage = current.currentLanguage
             )
         }
         musicManager.playForLevel(1)
+    }
+
+    /**
+     * Llamado al pulsar ESC en la pantalla de juego. Si estamos en pantalla continuable
+     * (nivel completado con Continuar/Ver anuncio, o oferta TRACE al inicio), guarda sesión y va al menú.
+     * Si estamos a mitad de nivel, muestra popup de confirmación (se pierde progreso).
+     */
+    fun onBackPressedFromGame() {
+        val state = _uiState.value
+        val isContinuable = state.isLevelComplete || state.showTraceAdOfferAtStart
+        if (isContinuable) {
+            saveSessionAndBackToMenu()
+        } else if (state.screen == GameScreen.Game && !state.isGameOver && !state.showLevelIntro &&
+            !state.isLevelComplete && !state.showTraceAdOfferAtStart
+        ) {
+            _uiState.update { it.copy(showExitDuringPlayPopup = true) }
+        } else {
+            backToMenu()
+        }
+    }
+
+    /** Guarda puntos y timer en savedSession y navega al menú (desde pantalla continuable). */
+    private fun saveSessionAndBackToMenu() {
+        timerJob?.cancel()
+        val state = _uiState.value
+        val session = SavedSession(
+            level = state.level,
+            totalScore = state.totalScore,
+            timeRemainingSeconds = state.timeRemainingSeconds,
+            difficulty = state.difficulty,
+            showTraceAdOffer = state.showTraceAdOffer,
+            showTraceAdOfferAtStart = state.showTraceAdOfferAtStart,
+            traceCount = state.traceCount,
+            levelsPlayedThisSession = state.levelsPlayedThisSession,
+            levelsCompletedSinceLastTraceOffer = state.levelsCompletedSinceLastTraceOffer,
+            lastTier = state.lastTier,
+            lastLevelPoints = state.lastLevelPoints
+        )
+        viewModelScope.launch {
+            _uiState.value = GameUiState(
+                screen = GameScreen.MainMenu,
+                highScore = gameSessionDao.getHighScore(),
+                isMusicEnabled = musicManager.isMusicEnabled,
+                savedSession = session,
+                currentLanguage = _uiState.value.currentLanguage
+            )
+        }
+        musicManager.playForLevel(1)
+    }
+
+    fun confirmExitDuringPlay() {
+        _uiState.update { it.copy(showExitDuringPlayPopup = false) }
+        backToMenu()
+    }
+
+    fun dismissExitDuringPlayPopup() {
+        _uiState.update { it.copy(showExitDuringPlayPopup = false) }
+    }
+
+    /** Restaura la partida guardada y vuelve a la pantalla de juego. */
+    fun continueSavedSession() {
+        val session = _uiState.value.savedSession ?: return
+        timerJob?.cancel()
+        levelStartTime = System.currentTimeMillis()
+        if (session.showTraceAdOfferAtStart) {
+            val secretCode = codeGenerator.generate(Difficulty.NORMAL)
+            musicManager.playForLevel(1)
+            val current = _uiState.value
+            _uiState.value = GameUiState(
+                screen = GameScreen.Game,
+                showLevelIntro = false,
+                level = 1,
+                secretCode = secretCode,
+                timeRemainingSeconds = session.timeRemainingSeconds,
+                totalScore = session.totalScore,
+                difficulty = session.difficulty,
+                traceCount = session.traceCount,
+                levelsPlayedThisSession = session.levelsPlayedThisSession,
+                levelsCompletedSinceLastTraceOffer = session.levelsCompletedSinceLastTraceOffer,
+                showTraceAdOfferAtStart = true,
+                isMusicEnabled = musicManager.isMusicEnabled,
+                timeBonusDisplayApplied = true,
+                scoreBonusDisplayApplied = true,
+                savedSession = null,
+                currentLanguage = current.currentLanguage
+            )
+        } else {
+            musicManager.fadeToSilence()
+            val dummyCode = codeGenerator.generate(session.difficulty)
+            val current = _uiState.value
+            _uiState.value = GameUiState(
+                screen = GameScreen.Game,
+                showLevelIntro = false,
+                showVictoryPenetration = false,
+                level = session.level,
+                secretCode = dummyCode,
+                attemptsRemaining = session.difficulty.baseAttempts,
+                maxAttempts = session.difficulty.baseAttempts,
+                timeRemainingSeconds = session.timeRemainingSeconds,
+                totalScore = session.totalScore,
+                difficulty = session.difficulty,
+                isLevelComplete = true,
+                lastTier = session.lastTier,
+                lastLevelPoints = session.lastLevelPoints,
+                showTraceAdOffer = session.showTraceAdOffer,
+                traceCount = session.traceCount,
+                levelsPlayedThisSession = session.levelsPlayedThisSession,
+                levelsCompletedSinceLastTraceOffer = session.levelsCompletedSinceLastTraceOffer,
+                isMusicEnabled = musicManager.isMusicEnabled,
+                timeBonusDisplayApplied = true,
+                scoreBonusDisplayApplied = true,
+                savedSession = null,
+                currentLanguage = current.currentLanguage
+            )
+        }
+    }
+
+    /** Borra la sesión guardada y arranca una partida nueva (tras confirmar en el menú). */
+    fun clearSavedSessionAndStartNew() {
+        _uiState.update { it.copy(savedSession = null) }
+        startPlaying()
     }
 
     override fun onCleared() {
@@ -840,6 +1010,26 @@ class GameViewModel @Inject constructor(
 
 enum class GameScreen { MainMenu, Leaderboard, Game, DifficultyChoice, GameOver }
 enum class GameOverReason { TimeUp, NoAttemptsLeft }
+
+/**
+ * Estado guardado cuando el usuario sale con ESC desde pantalla de nivel completado
+ * o desde la oferta de TRACE al inicio. Permite "Continuar partida" en el menú.
+ */
+data class SavedSession(
+    val level: Int,
+    val totalScore: Int,
+    val timeRemainingSeconds: Long,
+    val difficulty: Difficulty,
+    val showTraceAdOffer: Boolean,
+    val showTraceAdOfferAtStart: Boolean,
+    val traceCount: Int,
+    val levelsPlayedThisSession: Int,
+    val levelsCompletedSinceLastTraceOffer: Int,
+    val lastTier: Tier?,
+    val lastLevelPoints: Int
+) {
+    val hasWatchAdOption: Boolean get() = showTraceAdOffer || showTraceAdOfferAtStart
+}
 
 data class GameUiState(
     val screen: GameScreen = GameScreen.MainMenu,
@@ -896,5 +1086,13 @@ data class GameUiState(
     /** True cuando el bonus de score ya se confirmó (evita re-sumando en rotación). */
     val scoreBonusDisplayApplied: Boolean = false,
     /** Mostrar popup de selección de idioma. */
-    val showLanguagePopup: Boolean = false
+    val showLanguagePopup: Boolean = false,
+    /** Tras cambiar idioma, la Activity debe recrearse para aplicar el nuevo locale. */
+    val needRecreate: Boolean = false,
+    /** Sesión guardada al salir con ESC desde nivel completado o oferta TRACE; menú muestra Continuar partida. */
+    val savedSession: SavedSession? = null,
+    /** Popup al pulsar ESC durante un nivel en juego: se pierde progreso de penetración. */
+    val showExitDuringPlayPopup: Boolean = false,
+    /** True tras el primer click en "Ver anuncio"; deshabilita el botón para evitar múltiples cargas/ads. */
+    val watchAdButtonPressed: Boolean = false
 )

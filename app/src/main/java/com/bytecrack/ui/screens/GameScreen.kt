@@ -62,6 +62,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.res.stringResource
+import com.bytecrack.R
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -90,7 +92,8 @@ import com.bytecrack.audio.TypingDuration
 fun GameScreen(
     uiState: GameUiState,
     viewModel: GameViewModel,
-    onBackToMenu: () -> Unit
+    onBackToMenu: () -> Unit,
+    onBackFromGame: () -> Unit
 ) {
     val activity = LocalContext.current as? Activity
 
@@ -115,6 +118,7 @@ fun GameScreen(
                     uiState = uiState,
                     viewModel = viewModel,
                     onBackToMenu = onBackToMenu,
+                    onBackFromGame = onBackFromGame,
                     activity = activity
                 )
             }
@@ -140,6 +144,7 @@ private fun GamePlayContent(
     uiState: GameUiState,
     viewModel: GameViewModel,
     onBackToMenu: () -> Unit,
+    onBackFromGame: () -> Unit,
     activity: Activity?
 ) {
     // Notificar al ViewModel cuando la Activity vuelve al primer plano (tras un anuncio)
@@ -266,7 +271,7 @@ private fun GamePlayContent(
 
     val displayTimerValue: Long = when {
         uiState.isLevelComplete && uiState.timeBonusDisplayApplied && uiState.lastTier != null ->
-            uiState.timeRemainingSeconds + uiState.lastTier.bonusSeconds * uiState.difficulty.pointMultiplier
+            uiState.timeRemainingSeconds + uiState.lastTier.bonusSeconds * uiState.difficulty.timeBonusMultiplier
         uiState.isLevelComplete && bonusTimerTarget != null ->
             animatedTimerValue.toLong()
         else ->
@@ -340,7 +345,7 @@ private fun GamePlayContent(
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
-                            imageVector = if (uiState.isMusicEnabled) Icons.AutoMirrored.Filled.VolumeOff else Icons.AutoMirrored.Filled.VolumeUp,
+                            imageVector = if (uiState.isMusicEnabled) Icons.AutoMirrored.Filled.VolumeUp else Icons.AutoMirrored.Filled.VolumeOff,
                             contentDescription = null,
                             tint = Color(0xFF00FF41).copy(alpha = 0.6f),
                             modifier = Modifier.size(12.dp)
@@ -351,7 +356,7 @@ private fun GamePlayContent(
                         modifier = Modifier
                             .border(1.dp, Color(0xFF00FF41).copy(alpha = 0.45f))
                             .background(Color(0xFF00FF41).copy(alpha = 0.05f))
-                            .clickable { onBackToMenu() }
+                            .clickable { onBackFromGame() }
                             .padding(horizontal = 10.dp, vertical = 4.dp),
                         contentAlignment = Alignment.Center
                     ) {
@@ -508,6 +513,94 @@ private fun GamePlayContent(
                 }
             )
         }
+
+        // Popup al pulsar ESC durante partida: se pierde progreso de penetración en nodos
+        if (uiState.showExitDuringPlayPopup) {
+            ExitDuringPlayPopup(
+                onExit = { viewModel.confirmExitDuringPlay() },
+                onReturnToGame = { viewModel.dismissExitDuringPlayPopup() }
+            )
+        }
+    }
+}
+
+@Composable
+private fun ExitDuringPlayPopup(
+    onExit: () -> Unit,
+    onReturnToGame: () -> Unit
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black.copy(alpha = 0.88f))
+            .clickable(enabled = false) { },
+        contentAlignment = Alignment.Center
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth(0.85f)
+                .border(1.dp, Color(0xFFFF6600).copy(alpha = 0.5f))
+                .background(Color(0xFF0d1117))
+                .padding(24.dp)
+                .clickable(enabled = false) { },
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Text(
+                text = stringResource(R.string.exit_during_play_title),
+                fontFamily = FontFamily.Monospace,
+                fontWeight = FontWeight.Bold,
+                fontSize = 14.sp,
+                color = Color(0xFFFF6600)
+            )
+            Spacer(modifier = Modifier.height(16.dp))
+            Text(
+                text = stringResource(R.string.exit_during_play_message),
+                fontFamily = FontFamily.Monospace,
+                fontSize = 12.sp,
+                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.9f)
+            )
+            Spacer(modifier = Modifier.height(24.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .border(1.dp, Color(0xFFFF6600).copy(alpha = 0.5f))
+                        .background(Color(0xFFFF6600).copy(alpha = 0.08f))
+                        .clickable { onReturnToGame() }
+                        .padding(horizontal = 16.dp, vertical = 12.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = stringResource(R.string.exit_during_play_btn_return),
+                        fontFamily = FontFamily.Monospace,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFF00FF41)
+                    )
+                }
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .border(1.dp, Color(0xFFFF0000).copy(alpha = 0.5f))
+                        .background(Color(0xFFFF0000).copy(alpha = 0.08f))
+                        .clickable { onExit() }
+                        .padding(horizontal = 16.dp, vertical = 12.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = stringResource(R.string.exit_during_play_btn_exit),
+                        fontFamily = FontFamily.Monospace,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFFFF0000)
+                    )
+                }
+            }
+        }
     }
 }
 
@@ -634,19 +727,20 @@ private fun GameConsoleBox(
             // Al continuar al siguiente nivel: añadir una sola vez el bloque con puntos y time bonus
             val tier = prev.lastTier
             if (tier != null) {
-                val mult = prev.difficulty.pointMultiplier
-                val effectiveBonus = tier.bonusSeconds * mult
+                val timeMult = prev.difficulty.timeBonusMultiplier
+                val pointsMult = prev.difficulty.pointMultiplier
+                val effectiveBonus = tier.bonusSeconds * timeMult
                 val resultLines = buildList<Pair<String, Color>> {
                     add("─────────────────────────────" to green.copy(alpha = 0.3f))
                     add("ACCESS GRANTED" to green)
                     add("TIER: ${tier.name} — ${tier.displayName}" to cyan)
                     add(
-                        (if (mult > 1) "TIME BONUS: +${effectiveBonus}s  (${tier.bonusSeconds}s tier × ${mult} diff)"
+                        (if (timeMult > 1) "TIME BONUS: +${effectiveBonus}s  (${tier.bonusSeconds}s tier × ${timeMult} diff)"
                         else "TIME BONUS: +${effectiveBonus}s") to green.copy(alpha = 0.8f)
                     )
                     if (prev.wonViaReward) add("CONTINUATION (reward — no points)" to green.copy(alpha = 0.8f))
                     else add(
-                        (if (mult > 1) "POINTS: +${prev.lastLevelPoints}  (${tier.basePoints} base × ${mult} diff)"
+                        (if (pointsMult > 1) "POINTS: +${prev.lastLevelPoints}  (${tier.basePoints} base × ${pointsMult} diff)"
                         else "POINTS: +${prev.lastLevelPoints}") to green.copy(alpha = 0.8f)
                     )
                 }
@@ -792,7 +886,7 @@ private fun GameConsoleBox(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .verticalScroll(scrollState)
+                    .verticalScroll(scrollState, enabled = !showTransitionButtons)
             ) {
                 Spacer(modifier = Modifier.height(consoleHeight))
                 Text(
@@ -974,6 +1068,7 @@ private fun GameConsoleBox(
                     InlineRewardedAdPrompt(
                         difficulty = uiState.difficulty,
                         fromTimeOut = uiState.offerRewardedAdFromTimeOut,
+                        watchAdButtonPressed = uiState.watchAdButtonPressed,
                         onWatchAd = { activity?.let { act -> viewModel.requestRewardedAd(act) } },
                         onDecline = { viewModel.declineExtraAttempt() },
                         buttonsOutsideConsole = true,
@@ -1014,6 +1109,7 @@ private fun GameConsoleBox(
 
                 uiState.showTraceAdOfferAtStart -> {
                     InlineTraceAdOfferPrompt(
+                        watchAdButtonPressed = uiState.watchAdButtonPressed,
                         onWatchAd = { activity?.let { act -> viewModel.requestTraceAd(act) } },
                         onSkip = { viewModel.skipTraceOffer() },
                         buttonsOutsideConsole = true,
@@ -1098,7 +1194,7 @@ private fun GameControls(
             if (uiState.traceCount >= 3 && uiState.crackedDigits.size < digitCount) {
                 Spacer(modifier = Modifier.width(6.dp))
                 Text(
-                    text = "Toca slot para crackear",
+                    text = stringResource(R.string.game_tap_slot_to_crack),
                     fontFamily = FontFamily.Monospace,
                     fontSize = 8.sp,
                     color = Color(0xFF00FF41).copy(alpha = 0.5f)
@@ -1284,13 +1380,14 @@ private fun TerminalButton(
     text: String,
     color: Color,
     modifier: Modifier = Modifier,
+    enabled: Boolean = true,
     onClick: () -> Unit
 ) {
     Box(
         modifier = modifier
-            .border(1.dp, color.copy(alpha = 0.55f))
-            .background(color.copy(alpha = 0.08f))
-            .clickable { onClick() }
+            .border(1.dp, color.copy(alpha = if (enabled) 0.55f else 0.25f))
+            .background(color.copy(alpha = if (enabled) 0.08f else 0.04f))
+            .clickable(enabled = enabled) { onClick() }
             .padding(horizontal = 14.dp, vertical = 10.dp),
         contentAlignment = Alignment.Center
     ) {
@@ -1299,7 +1396,7 @@ private fun TerminalButton(
             fontFamily = FontFamily.Monospace,
             fontWeight = FontWeight.Bold,
             fontSize = 12.sp,
-            color = color
+            color = color.copy(alpha = if (enabled) 1f else 0.5f)
         )
     }
 }
@@ -1324,31 +1421,27 @@ private fun InlineLevelComplete(
     val tier = uiState.lastTier ?: return
     val green = Color(0xFF00FF41)
     val cyan = MaterialTheme.colorScheme.secondary
-    val mult = uiState.difficulty.pointMultiplier
-    val effectiveBonus = tier.bonusSeconds * mult
+    val timeMult = uiState.difficulty.timeBonusMultiplier
+    val pointsMult = uiState.difficulty.pointMultiplier
+    val effectiveBonus = tier.bonusSeconds * timeMult
 
     val infoLines = buildList {
         add("─────────────────────────────")
         add("ACCESS GRANTED")
         add("TIER: ${tier.name} — ${tier.displayName}")
         add(
-            if (mult > 1) "TIME BONUS: +${effectiveBonus}s  (${tier.bonusSeconds}s tier × ${mult} diff)"
+            if (timeMult > 1) "TIME BONUS: +${effectiveBonus}s  (${tier.bonusSeconds}s tier × ${timeMult} diff)"
             else "TIME BONUS: +${effectiveBonus}s"
         )
         if (uiState.wonViaReward) {
             add("CONTINUATION (reward — no points)")
         } else {
             add(
-                if (mult > 1) "POINTS: +${uiState.lastLevelPoints}  (${tier.basePoints} base × ${mult} diff)"
+                if (pointsMult > 1) "POINTS: +${uiState.lastLevelPoints}  (${tier.basePoints} base × ${pointsMult} diff)"
                 else "POINTS: +${uiState.lastLevelPoints}"
             )
         }
-        if (uiState.showTraceAdOffer) {
-            add("─────────────────────────────")
-            add("TRACE AVAILABLE")
-            add("Watch a brief ad to earn +1 TRACE")
-            add("(use for HINT or to crack a slot)")
-        }
+        // La info de TRACE (ver anuncio / omitir) va solo bajo los botones, no en consola.
     }
 
     val revealedChars = remember { mutableStateListOf<Int>().also { list -> infoLines.forEach { _ -> list.add(-1) } } }
@@ -1391,8 +1484,7 @@ private fun InlineLevelComplete(
             val line = infoLines[lineIdx]
             val isSystem = line.startsWith("─") || line.startsWith("TIER") ||
                 line.startsWith("TIME") || line.startsWith("POINTS") ||
-                line.startsWith("CONTINUATION") || line.startsWith("TRACE AVAILABLE") ||
-                line.startsWith("Watch") || line.startsWith("(use")
+                line.startsWith("CONTINUATION")
             if (isSystem) {
                 delay(Random.nextLong(50, 100))
                 revealedChars[lineIdx] = line.length
@@ -1447,7 +1539,6 @@ private fun InlineLevelComplete(
                 line == "ACCESS GRANTED" -> green
                 line.startsWith("TIER:") -> cyan
                 line.startsWith("─") -> green.copy(alpha = 0.3f)
-                line.startsWith("TRACE AVAILABLE") -> cyan
                 else -> green.copy(alpha = 0.8f)
             }
             Text(
@@ -1475,13 +1566,14 @@ private fun InlineLevelComplete(
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     TerminalButton(
-                        text = "[A] VER ANUNCIO",
+                        text = stringResource(R.string.reward_btn_watch_ad),
                         color = cyan,
                         modifier = Modifier.weight(1f),
+                        enabled = !uiState.watchAdButtonPressed,
                         onClick = onWatchAd
                     )
                     TerminalButton(
-                        text = "[B] CONTINUAR",
+                        text = stringResource(R.string.reward_btn_continue),
                         color = green.copy(alpha = 0.7f),
                         modifier = Modifier.weight(1f),
                         onClick = onSkip
@@ -1489,7 +1581,7 @@ private fun InlineLevelComplete(
                 }
             } else {
                 TerminalButton(
-                    text = "[ CONTINUAR ]",
+                    text = stringResource(R.string.btn_continue),
                     color = green,
                     onClick = onContinue
                 )
@@ -1504,6 +1596,7 @@ private fun InlineLevelComplete(
 private fun InlineRewardedAdPrompt(
     difficulty: Difficulty,
     fromTimeOut: Boolean,
+    watchAdButtonPressed: Boolean,
     onWatchAd: () -> Unit,
     onDecline: () -> Unit,
     buttonsOutsideConsole: Boolean = false,
@@ -1516,23 +1609,25 @@ private fun InlineRewardedAdPrompt(
     val green = Color(0xFF00FF41)
 
     // El contexto anterior ya quedó en la consola desde la discovered transition
-    // Solo mostramos el prompt de override
+    // Solo mostramos el prompt de override (traducido)
+    val overrideTitle = stringResource(R.string.reward_override_available)
+    val overrideShortDesc = stringResource(R.string.reward_override_short_desc)
     val promptLines = if (fromTimeOut) listOf(
         TransitionLine("[WARN] Trace closing in", isSystemResponse = true),
         TransitionLine("[ERR] Source flagged", isSystemResponse = true),
         TransitionLine("─────────────────────────────", isSystemResponse = true),
         TransitionLine("[ERR] BREACH FAILED — IP compromised", isSystemResponse = true),
         TransitionLine("─────────────────────────────", isSystemResponse = true),
-        TransitionLine("Emergency override available"),
-        TransitionLine("Burn a borrowed node — single use")
+        TransitionLine(overrideTitle),
+        TransitionLine(overrideShortDesc)
     ) else listOf(
         TransitionLine("[WARN] Repeated attempts flagged", isSystemResponse = true),
         TransitionLine("[ERR] Trace in progress", isSystemResponse = true),
         TransitionLine("─────────────────────────────", isSystemResponse = true),
         TransitionLine("[ERR] BREACH FAILED — attempts exhausted", isSystemResponse = true),
         TransitionLine("─────────────────────────────", isSystemResponse = true),
-        TransitionLine("Emergency override available"),
-        TransitionLine("Burn a borrowed node — single use")
+        TransitionLine(overrideTitle),
+        TransitionLine(overrideShortDesc)
     )
 
     val revealedChars = remember { mutableStateListOf<Int>().also { list -> promptLines.forEach { _ -> list.add(-1) } } }
@@ -1578,7 +1673,7 @@ private fun InlineRewardedAdPrompt(
                 tl.text.startsWith("[ERR]") -> red
                 tl.text.startsWith("[WARN]") -> orange.copy(alpha = 0.85f)
                 tl.text.startsWith("─") -> orange.copy(alpha = 0.35f)
-                tl.text.startsWith("Emergency") -> orange
+                tl.text == overrideTitle || tl.text == overrideShortDesc -> orange
                 tl.isSystemResponse -> orange.copy(alpha = 0.75f)
                 else -> orange
             }
@@ -1598,13 +1693,14 @@ private fun InlineRewardedAdPrompt(
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 TerminalButton(
-                    text = "[A] EJECUTAR OVERRIDE",
+                    text = stringResource(R.string.reward_btn_override),
                     color = orange,
                     modifier = Modifier.weight(1f),
+                    enabled = !watchAdButtonPressed,
                     onClick = onWatchAd
                 )
                 TerminalButton(
-                    text = "[B] ABANDONAR SESIÓN",
+                    text = stringResource(R.string.reward_btn_abandon),
                     color = red.copy(alpha = 0.7f),
                     modifier = Modifier.weight(1f),
                     onClick = onDecline
@@ -1689,13 +1785,13 @@ private fun InlinePotentialGameOver(
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 TerminalButton(
-                    text = "[A] CONTINUAR",
+                    text = "[A] " + stringResource(R.string.btn_continue).replace("[ ", "").replace(" ]", ""),
                     color = green,
                     modifier = Modifier.weight(1f),
                     onClick = onContinue
                 )
                 TerminalButton(
-                    text = "[B] RENDIRSE",
+                    text = stringResource(R.string.reward_btn_give_up),
                     color = red.copy(alpha = 0.7f),
                     modifier = Modifier.weight(1f),
                     onClick = onGiveUp
@@ -1709,6 +1805,7 @@ private fun InlinePotentialGameOver(
 
 @Composable
 private fun InlineTraceAdOfferPrompt(
+    watchAdButtonPressed: Boolean,
     onWatchAd: () -> Unit,
     onSkip: () -> Unit,
     buttonsOutsideConsole: Boolean = false,
@@ -1786,13 +1883,14 @@ private fun InlineTraceAdOfferPrompt(
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 TerminalButton(
-                    text = "[A] VER ANUNCIO",
+                    text = stringResource(R.string.reward_btn_watch_ad),
                     color = cyan,
                     modifier = Modifier.weight(1f),
+                    enabled = !watchAdButtonPressed,
                     onClick = onWatchAd
                 )
                 TerminalButton(
-                    text = "[B] OMITIR",
+                    text = stringResource(R.string.reward_btn_skip),
                     color = green.copy(alpha = 0.6f),
                     modifier = Modifier.weight(1f),
                     onClick = onSkip
@@ -1883,13 +1981,13 @@ private fun InlineTracePurchasePrompt(
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 TerminalButton(
-                    text = "[A] VER ANUNCIO",
+                    text = stringResource(R.string.reward_btn_watch_ad),
                     color = cyan,
                     modifier = Modifier.weight(1f),
                     onClick = onWatchAd
                 )
                 TerminalButton(
-                    text = "[B] RECHAZAR",
+                    text = "[B] " + stringResource(R.string.btn_decline).replace("[ ", "").replace(" ]", ""),
                     color = green.copy(alpha = 0.5f),
                     modifier = Modifier.weight(1f),
                     onClick = onDecline
@@ -1936,20 +2034,20 @@ private fun TransitionActionButtons(
             uiState.isLevelComplete -> {
                 if (uiState.showTraceAdOffer) {
                     TerminalButton(
-                        text = "[A] VER ANUNCIO",
+                        text = stringResource(R.string.reward_btn_watch_ad),
                         color = cyan,
                         modifier = Modifier.weight(1f),
                         onClick = onWatchAd
                     )
                     TerminalButton(
-                        text = "[B] CONTINUAR",
+                        text = stringResource(R.string.reward_btn_continue),
                         color = green.copy(alpha = 0.7f),
                         modifier = Modifier.weight(1f),
                         onClick = onSkip
                     )
                 } else {
                     TerminalButton(
-                        text = "[ CONTINUAR ]",
+                        text = stringResource(R.string.btn_continue),
                         color = green,
                         modifier = Modifier.fillMaxWidth(),
                         onClick = onContinue
@@ -1958,13 +2056,14 @@ private fun TransitionActionButtons(
             }
             uiState.offerRewardedAd -> {
                 TerminalButton(
-                    text = "[A] EJECUTAR OVERRIDE",
+                    text = stringResource(R.string.reward_btn_override),
                     color = orange,
                     modifier = Modifier.weight(1f),
+                    enabled = !uiState.watchAdButtonPressed,
                     onClick = onWatchRewardedAd
                 )
                 TerminalButton(
-                    text = "[B] ABANDONAR SESIÓN",
+                    text = stringResource(R.string.reward_btn_abandon),
                     color = red.copy(alpha = 0.7f),
                     modifier = Modifier.weight(1f),
                     onClick = onDeclineRewarded
@@ -1972,13 +2071,13 @@ private fun TransitionActionButtons(
             }
             uiState.showPotentialGameOverAfterReward -> {
                 TerminalButton(
-                    text = "[A] CONTINUAR",
+                    text = stringResource(R.string.reward_btn_continue),
                     color = green,
                     modifier = Modifier.weight(1f),
                     onClick = onConfirmContinue
                 )
                 TerminalButton(
-                    text = "[B] RENDIRSE",
+                    text = stringResource(R.string.reward_btn_give_up),
                     color = red.copy(alpha = 0.7f),
                     modifier = Modifier.weight(1f),
                     onClick = onConfirmGiveUp
@@ -1986,13 +2085,14 @@ private fun TransitionActionButtons(
             }
             uiState.offerTraceAd -> {
                 TerminalButton(
-                    text = "[A] VER ANUNCIO",
+                    text = stringResource(R.string.reward_btn_watch_ad),
                     color = cyan,
                     modifier = Modifier.weight(1f),
+                    enabled = !uiState.watchAdButtonPressed,
                     onClick = onWatchTracePurchase
                 )
                 TerminalButton(
-                    text = "[B] RECHAZAR",
+                    text = "[B] " + stringResource(R.string.btn_decline).replace("[ ", "").replace(" ]", ""),
                     color = green.copy(alpha = 0.5f),
                     modifier = Modifier.weight(1f),
                     onClick = onDeclineTracePurchase
@@ -2000,13 +2100,14 @@ private fun TransitionActionButtons(
             }
             uiState.showTraceAdOfferAtStart -> {
                 TerminalButton(
-                    text = "[A] VER ANUNCIO",
+                    text = stringResource(R.string.reward_btn_watch_ad),
                     color = cyan,
                     modifier = Modifier.weight(1f),
+                    enabled = !uiState.watchAdButtonPressed,
                     onClick = onWatchTraceAtStart
                 )
                 TerminalButton(
-                    text = "[B] OMITIR",
+                    text = stringResource(R.string.reward_btn_skip),
                     color = green.copy(alpha = 0.6f),
                     modifier = Modifier.weight(1f),
                     onClick = onSkipTraceAtStart
@@ -2020,13 +2121,13 @@ private fun TransitionActionButtons(
         when {
             uiState.offerRewardedAd -> {
                 Text(
-                    text = "[A] +${uiState.difficulty.rewardAdBreachExtension} intentos extra, +${uiState.difficulty.rewardAdSeconds}s al timer",
+                    text = stringResource(R.string.reward_override_desc, uiState.difficulty.rewardAdBreachExtension, uiState.difficulty.rewardAdSeconds.toInt()),
                     fontFamily = FontFamily.Monospace,
                     fontSize = 11.sp,
                     color = mutedGray
                 )
                 Text(
-                    text = "[B] Termina la partida",
+                    text = stringResource(R.string.reward_abandon_desc),
                     fontFamily = FontFamily.Monospace,
                     fontSize = 11.sp,
                     color = mutedGray,
@@ -2035,13 +2136,13 @@ private fun TransitionActionButtons(
             }
             uiState.isLevelComplete && uiState.showTraceAdOffer -> {
                 Text(
-                    text = "[A] Ganas +1 TRACE (usar para HINT o bloquear un slot)",
+                    text = stringResource(R.string.reward_trace_explanation),
                     fontFamily = FontFamily.Monospace,
                     fontSize = 11.sp,
                     color = mutedGray
                 )
                 Text(
-                    text = "[B] Continuar sin TRACE",
+                    text = stringResource(R.string.reward_skip_explanation),
                     fontFamily = FontFamily.Monospace,
                     fontSize = 11.sp,
                     color = mutedGray,
@@ -2050,13 +2151,13 @@ private fun TransitionActionButtons(
             }
             uiState.offerTraceAd -> {
                 Text(
-                    text = "[A] Ganas +1 TRACE (usar para HINT o bloquear un slot)",
+                    text = stringResource(R.string.reward_trace_explanation),
                     fontFamily = FontFamily.Monospace,
                     fontSize = 11.sp,
                     color = mutedGray
                 )
                 Text(
-                    text = "[B] Continuar sin TRACE",
+                    text = stringResource(R.string.reward_skip_explanation),
                     fontFamily = FontFamily.Monospace,
                     fontSize = 11.sp,
                     color = mutedGray,
@@ -2065,13 +2166,13 @@ private fun TransitionActionButtons(
             }
             uiState.showTraceAdOfferAtStart -> {
                 Text(
-                    text = "[A] Ganas +1 TRACE (usar para HINT o bloquear un slot)",
+                    text = stringResource(R.string.reward_trace_explanation),
                     fontFamily = FontFamily.Monospace,
                     fontSize = 11.sp,
                     color = mutedGray
                 )
                 Text(
-                    text = "[B] Empezar sin TRACE",
+                    text = stringResource(R.string.reward_skip_explanation_at_start),
                     fontFamily = FontFamily.Monospace,
                     fontSize = 11.sp,
                     color = mutedGray,
@@ -2114,7 +2215,7 @@ private fun DifficultyChoiceContent(
             Spacer(modifier = Modifier.height(8.dp))
 
             Text(
-                text = "Level ${uiState.level} complete // Choose payload:",
+                text = stringResource(R.string.difficulty_prompt, uiState.level),
                 fontFamily = FontFamily.Monospace,
                 fontSize = 11.sp,
                 color = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)
@@ -2124,32 +2225,32 @@ private fun DifficultyChoiceContent(
 
             DifficultyOption(
                 code = "01",
-                label = "MODO DIFÍCIL",
-                description = "3 dígitos hex · 3.360 combos · Puntos ×3",
+                label = stringResource(R.string.difficulty_hard),
+                description = stringResource(R.string.difficulty_hard_desc),
                 color = Color(0xFFFF6600),
                 onClick = { onSelectDifficulty(Difficulty.HARD) }
             )
             Spacer(modifier = Modifier.height(12.dp))
             DifficultyOption(
                 code = "02",
-                label = "MUY DIFÍCIL",
-                description = "4 dígitos decimales · 5.040 combos · Puntos ×2",
+                label = stringResource(R.string.difficulty_very_hard),
+                description = stringResource(R.string.difficulty_very_hard_desc),
                 color = Color(0xFFFF3300),
                 onClick = { onSelectDifficulty(Difficulty.VERY_HARD) }
             )
             Spacer(modifier = Modifier.height(12.dp))
             DifficultyOption(
                 code = "03",
-                label = "IRONMAN",
-                description = "4 dígitos hex · 43.680 combos · 25 brechas · Puntos ×20",
+                label = stringResource(R.string.difficulty_ironman),
+                description = stringResource(R.string.difficulty_ironman_desc),
                 color = Color(0xFFFF0000),
                 onClick = { onSelectDifficulty(Difficulty.IRONMAN) }
             )
             Spacer(modifier = Modifier.height(12.dp))
             DifficultyOption(
                 code = "04",
-                label = "MANTENER NIVEL",
-                description = "${uiState.difficulty.displayName} · ${uiState.difficulty.digitCount} dígitos · ×${uiState.difficulty.pointMultiplier}",
+                label = stringResource(R.string.difficulty_keep),
+                description = stringResource(R.string.difficulty_keep_desc, uiState.difficulty.displayName, uiState.difficulty.digitCount, uiState.difficulty.pointMultiplier),
                 color = MaterialTheme.colorScheme.primary,
                 onClick = { onSelectDifficulty(uiState.difficulty) }
             )
@@ -2439,7 +2540,7 @@ private fun GameOverPopup(
                     )
                 }
                 TerminalButton(
-                    text = "[ DESCONECTAR ]",
+                    text = stringResource(R.string.btn_disconnect),
                     color = red,
                     modifier = Modifier.fillMaxWidth(),
                     onClick = onBackToMenu
@@ -2541,7 +2642,7 @@ private fun InlineGameOver(
             )
         }
         TerminalButton(
-            text = "[ DESCONECTAR ]",
+            text = stringResource(R.string.btn_disconnect),
             color = red,
             modifier = Modifier.fillMaxWidth(),
             onClick = onBackToMenu
